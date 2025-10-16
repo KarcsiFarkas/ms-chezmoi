@@ -1,0 +1,32 @@
+#!/bin/sh
+# This script runs on 'chezmoi apply' if it has changed.
+
+set -eu
+
+{{ if eq .data.osid "linux-ubuntu" -}}
+echo "==> Installing base packages for Ubuntu..."
+sudo apt-get update
+sudo apt-get install -y neovim tmux zsh git curl wget build-essential
+
+{{ else if eq .data.osid "linux-arch" -}}
+echo "==> Installing base packages for Arch Linux..."
+sudo pacman -Syu --noconfirm --needed neovim tmux zsh git curl wget base-devel
+
+{{ else if eq .data.osid "linux-nixos" -}}
+echo "==> Skipping package installation for NixOS (managed declaratively)."
+echo "==> Add packages to your NixOS configuration or home-manager instead."
+
+{{ else if eq .data.osid "darwin" -}}
+echo "==> Installing base packages for macOS..."
+# Install Homebrew if not present
+if ! command -v brew >/dev/null 2>&1; then
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+fi
+brew install neovim tmux zsh git curl wget
+
+{{ else -}}
+echo "==> OS ID '{{ .data.osid }}' not recognized for package installation."
+echo "==> Please install packages manually: neovim, tmux, zsh, git, curl, wget"
+{{- end }}
+
+echo "==> Package installation complete for {{ .data.osid }}"

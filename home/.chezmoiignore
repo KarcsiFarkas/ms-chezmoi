@@ -1,0 +1,51 @@
+# .chezmoiignore - Files to ignore based on OS and conditions
+
+# Ignore README files in the home directory
+README.md
+
+# OS-specific ignores
+{{- if ne .data.osid "darwin" }}
+# Ignore macOS-specific files on non-macOS systems
+.config/macos/
+{{- end }}
+
+{{- if ne .data.osid "linux-ubuntu" }}
+# Ignore Ubuntu-specific files on non-Ubuntu systems
+.config/ubuntu/
+{{- end }}
+
+{{- if ne .data.osid "linux-arch" }}
+# Ignore Arch-specific files on non-Arch systems
+.config/arch/
+{{- end }}
+
+{{- if ne .data.osid "linux-nixos" }}
+# Ignore NixOS-specific files on non-NixOS systems
+.config/nixos/
+{{- end }}
+
+# Work-specific files (ignore if not work environment)
+{{- if not .data.work }}
+.config/git/work.conf
+.zshrc.work
+.bashrc.work
+{{- end }}
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Editor-specific files
+.vscode/
+.idea/
+*.sublime-*
+
+# Local configuration files (should be created manually)
+.bashrc.local
+.zshrc.local
+.config/local/

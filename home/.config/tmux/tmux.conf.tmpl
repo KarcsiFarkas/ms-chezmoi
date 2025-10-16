@@ -1,0 +1,141 @@
+# ~/.config/tmux/tmux.conf - tmux configuration file
+
+# Set true color support
+set -g default-terminal "screen-256color"
+set -ga terminal-overrides ",*256col*:Tc"
+
+# Set prefix key to Ctrl-a (more convenient than Ctrl-b)
+unbind C-b
+set -g prefix C-a
+bind C-a send-prefix
+
+# Enable mouse support
+set -g mouse on
+
+# Start windows and panes at 1, not 0
+set -g base-index 1
+setw -g pane-base-index 1
+
+# Renumber windows when a window is closed
+set -g renumber-windows on
+
+# Increase scrollback buffer size
+set -g history-limit 10000
+
+# Enable activity alerts
+setw -g monitor-activity on
+set -g visual-activity on
+
+# Set escape time to zero for faster command sequences
+set -sg escape-time 0
+
+# Increase repeat time for repeatable commands
+set -g repeat-time 1000
+
+# Key bindings
+# Reload configuration
+bind r source-file ~/.config/tmux/tmux.conf \; display-message "Config reloaded!"
+
+# Split panes using | and -
+bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+unbind '"'
+unbind %
+
+# Switch panes using Alt-arrow without prefix
+bind -n M-Left select-pane -L
+bind -n M-Right select-pane -R
+bind -n M-Up select-pane -U
+bind -n M-Down select-pane -D
+
+# Vim-style pane switching
+bind h select-pane -L
+bind j select-pane -D
+bind k select-pane -U
+bind l select-pane -R
+
+# Resize panes using Prefix + Shift + arrow keys
+bind -r H resize-pane -L 5
+bind -r J resize-pane -D 5
+bind -r K resize-pane -U 5
+bind -r L resize-pane -R 5
+
+# Copy mode settings
+setw -g mode-keys vi
+bind -T copy-mode-vi v send-keys -X begin-selection
+
+{{- if eq .data.osid "darwin" }}
+# macOS-specific copy settings
+bind -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "pbcopy"
+bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "pbcopy"
+{{- else }}
+# Linux-specific copy settings
+bind -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "xclip -in -selection clipboard"
+bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xclip -in -selection clipboard"
+{{- end }}
+
+# Status bar configuration
+set -g status on
+set -g status-interval 5
+set -g status-position bottom
+set -g status-justify left
+
+# Status bar colors
+set -g status-style 'bg=#1e1e1e,fg=#ffffff'
+set -g status-left-style 'bg=#007acc,fg=#ffffff'
+set -g status-right-style 'bg=#007acc,fg=#ffffff'
+
+# Window status colors
+setw -g window-status-style 'bg=#1e1e1e,fg=#888888'
+setw -g window-status-current-style 'bg=#007acc,fg=#ffffff,bold'
+setw -g window-status-activity-style 'bg=#ff6b6b,fg=#ffffff'
+
+# Pane border colors
+set -g pane-border-style 'fg=#888888'
+set -g pane-active-border-style 'fg=#007acc'
+
+# Status bar content
+set -g status-left-length 20
+set -g status-right-length 50
+
+set -g status-left ' #S '
+set -g status-right '#{?client_prefix,#[reverse] PREFIX #[noreverse] ,}#[bg=#007acc,fg=#ffffff] %H:%M %d-%b-%y '
+
+# Window status format
+setw -g window-status-format ' #I:#W#F '
+setw -g window-status-current-format ' #I:#W#F '
+
+# Message colors
+set -g message-style 'bg=#007acc,fg=#ffffff'
+set -g message-command-style 'bg=#007acc,fg=#ffffff'
+
+# Clock mode
+setw -g clock-mode-colour '#007acc'
+
+# OS-specific configurations
+{{- if eq .data.osid "darwin" }}
+# macOS-specific settings
+set -g default-command "reattach-to-user-namespace -l ${SHELL}"
+
+{{- else if eq .data.osid "linux-ubuntu" }}
+# Ubuntu-specific settings
+# Add any Ubuntu-specific tmux settings here
+
+{{- else if eq .data.osid "linux-arch" }}
+# Arch Linux-specific settings
+# Add any Arch-specific tmux settings here
+
+{{- else if eq .data.osid "linux-nixos" }}
+# NixOS-specific settings
+# Most configuration handled by NixOS configuration.nix
+{{- end }}
+
+# Plugin manager (TPM) - uncomment if using
+# List of plugins
+# set -g @plugin 'tmux-plugins/tpm'
+# set -g @plugin 'tmux-plugins/tmux-sensible'
+# set -g @plugin 'tmux-plugins/tmux-resurrect'
+# set -g @plugin 'tmux-plugins/tmux-continuum'
+
+# Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+# run '~/.tmux/plugins/tpm/tpm'

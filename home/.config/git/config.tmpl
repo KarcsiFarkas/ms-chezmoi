@@ -1,0 +1,56 @@
+[user]
+    name = {{ .data.name }}
+    email = {{ .data.email }}
+
+[core]
+{{- if eq .data.osid "linux-arch" }}
+    editor = nvim
+    pager = less -R
+{{- else if eq .data.osid "linux-ubuntu" }}
+    editor = nvim
+    pager = less -R
+{{- else if eq .data.osid "linux-nixos" }}
+    editor = nvim
+    pager = less -R
+{{- else if eq .data.osid "darwin" }}
+    editor = nvim
+    pager = less -R
+{{- else }}
+    editor = nano
+    pager = less
+{{- end }}
+    autocrlf = input
+    safecrlf = true
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = false
+
+[push]
+    default = simple
+
+[alias]
+    st = status
+    co = checkout
+    br = branch
+    ci = commit
+    df = diff
+    lg = log --oneline --graph --decorate --all
+    unstage = reset HEAD --
+    last = log -1 HEAD
+
+[color]
+    ui = auto
+
+[diff]
+    tool = vimdiff
+
+[merge]
+    tool = vimdiff
+
+{{- if .data.work }}
+[includeIf "gitdir:~/work/"]
+    path = ~/.config/git/work.conf
+{{- end }}
