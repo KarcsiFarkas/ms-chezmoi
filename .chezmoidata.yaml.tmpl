@@ -7,11 +7,7 @@
 
 {{- /* Deployment Profile Selection */ -}}
 {{- $profile := env "DEPLOYMENT_PROFILE" | default "production" -}}
-{{- $domain := env "TENANT_DOMAIN" -}}
-{{- if not $domain -}}
-{{-   $domain = promptString "domain" "Enter your domain (e.g., example.local)" "example.local" -}}
-{{- end -}}
-
+{{- $domain := env "TENANT_DOMAIN" | default "example.local" -}}
 {{- $timezone := env "TIMEZONE" | default "UTC" -}}
 {{- $acmeEmail := env "ACME_EMAIL" | default (printf "admin@%s" $domain) -}}
 
@@ -20,12 +16,12 @@
 
 {{- /* Tenant Information */ -}}
 tenant:
-  name: {{ env "TENANT_NAME" | default .chezmoi.hostname | quote }}
+  name: {{ env "TENANT_NAME" | default "default" | quote }}
   domain: {{ $domain | quote }}
 
 {{- /* System/OS Configuration */ -}}
 data:
-  osid: {{ .chezmoi.os | quote }}
+  osid: {{ env "OS" | default "linux" | quote }}
   work: {{ env "IS_WORK_ENV" | default "false" | eq "true" }}
 
 {{- /* Deployment Configuration */ -}}
@@ -159,7 +155,5 @@ services:
 {{- /* ========================================================================== */ -}}
 {{- /* Chezmoi System Information */ -}}
 {{- /* ========================================================================== */ -}}
-chezmoi:
-  sourceDir: {{ .chezmoi.sourceDir | quote }}
-  hostname: {{ .chezmoi.hostname | quote }}
-  os: {{ .chezmoi.os | quote }}
+{{- /* Note: .chezmoi namespace is automatically available in all templates */ -}}
+{{- /* No need to duplicate it here in the data file */ -}}
