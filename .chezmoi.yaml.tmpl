@@ -34,6 +34,11 @@ data:
     os: {{ .chezmoi.os | quote }}
     arch: {{ .chezmoi.arch | quote }}
 
+  # Additional data for templates
+  data:
+    osid: {{ .chezmoi.os | quote }}
+    work: {{ env "IS_WORK_ENV" | default "false" | eq "true" }}
+
 # Merge strategy for conflicting files
 merge:
   command: "vimdiff"
