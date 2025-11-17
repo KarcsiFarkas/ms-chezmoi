@@ -48,6 +48,10 @@ data:
 
   # Services configuration
   services:
+    traefik:
+      enabled: {{ env "ENABLE_TRAEFIK" | default "true" }}
+      acme_email: {{ env "TRAEFIK_ACME_EMAIL" | default (printf "admin@%s" $domain) | quote }}
+
     postgres:
       enabled: {{ env "ENABLE_POSTGRES" | default "true" }}
 
@@ -71,15 +75,23 @@ data:
       base_dn: {{ env "LDAP_BASE_DN" | default $baseDn | quote }}
 
     authelia:
-      enabled: {{ env "ENABLE_AUTHELIA" | default "true" }}
+      enabled: {{ env "ENABLE_AUTHELIA" | default "false" }}
       jwt_secret: {{ env "AUTHELIA_JWT_SECRET" | default "changeme_authelia_jwt_secret_min_64_chars_recommended" | quote }}
       session_secret: {{ env "AUTHELIA_SESSION_SECRET" | default "changeme_authelia_session_secret_min_64_chars" | quote }}
       storage_encryption_key: {{ env "AUTHELIA_STORAGE_KEY" | default "changeme_authelia_storage_key_min_32_chars" | quote }}
+
+    authentik:
+      enabled: {{ env "ENABLE_AUTHENTIK" | default "true" }}
+      db_user: {{ env "AUTHENTIK_DB_USER" | default "authentik" | quote }}
+      db_password: {{ env "AUTHENTIK_DB_PASSWORD" | default "changeme_authentik_db" | quote }}
+      secret_key: {{ env "AUTHENTIK_SECRET_KEY" | default "changeme_authentik_secret_key_min_60_chars_use_openssl_rand_base64_60" | quote }}
 
     nextcloud:
       enabled: {{ env "ENABLE_NEXTCLOUD" | default "false" }}
       admin_user: {{ env "NEXTCLOUD_ADMIN_USER" | default "admin" | quote }}
       admin_password: {{ env "NEXTCLOUD_ADMIN_PASSWORD" | default "changeme_nextcloud" | quote }}
+      db_user: {{ env "NEXTCLOUD_DB_USER" | default "nextcloud" | quote }}
+      db_password: {{ env "NEXTCLOUD_DB_PASSWORD" | default "changeme_nextcloud_db" | quote }}
       db_name: "nextcloud"
       media_path: {{ env "NEXTCLOUD_MEDIA_PATH" | default "./media/nextcloud" | quote }}
 
@@ -98,6 +110,7 @@ data:
       uid: "1000"
       gid: "1000"
       disable_registration: {{ env "GITEA_DISABLE_REGISTRATION" | default "false" | quote }}
+      require_signin: {{ env "GITEA_REQUIRE_SIGNIN" | default "false" | quote }}
 
     jellyfin:
       enabled: {{ env "ENABLE_JELLYFIN" | default "false" }}
@@ -109,6 +122,10 @@ data:
 
     immich:
       enabled: {{ env "ENABLE_IMMICH" | default "false" }}
+      version: {{ env "IMMICH_VERSION" | default "v2" | quote }}
+      db_user: {{ env "IMMICH_DB_USER" | default "postgres" | quote }}
+      db_password: {{ env "IMMICH_DB_PASSWORD" | default "changeme_immich_db" | quote }}
+      db_name: {{ env "IMMICH_DB_NAME" | default "immich" | quote }}
       upload_location: "./library"
       media_path: {{ env "IMMICH_MEDIA_PATH" | default "./media/immich" | quote }}
 
