@@ -201,6 +201,134 @@ chezmoi init
 # - etc.
 ```
 
+#### Method 3: Using ms-config Tenant Configuration (For Testing)
+
+If you have a tenant configuration in the `ms-config` repository (e.g., the `test` tenant), you can use it to quickly deploy with predefined settings.
+
+**Step 1: Locate your tenant configuration**
+
+```bash
+# Check available tenants
+ls -la /path/to/ms-config/tenants/
+
+# Example tenant structure:
+# ms-config/tenants/test/
+# ├── general.conf.yml    # General configuration (domain, runtime, etc.)
+# ├── selection.yml       # Service selection and options
+# └── password.txt        # Universal password (if using password mode: universal)
+```
+
+**Step 2: Convert ms-config tenant to environment variables**
+
+Create a helper script to convert the tenant config to environment variables:
+
+```bash
+# Create conversion script
+cat > ~/convert-tenant-config.sh << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+TENANT_PATH="${1:?Usage: $0 <path-to-tenant-dir>}"
+
+if [ ! -d "$TENANT_PATH" ]; then
+    echo "Error: Tenant directory not found: $TENANT_PATH"
+    exit 1
+fi
+
+GENERAL_CONF="$TENANT_PATH/general.conf.yml"
+SELECTION_CONF="$TENANT_PATH/selection.yml"
+
+if [ ! -f "$GENERAL_CONF" ]; then
+    echo "Error: general.conf.yml not found in $TENANT_PATH"
+    exit 1
+fi
+
+echo "# Generated from ms-config tenant: $(basename $TENANT_PATH)"
+echo "# $(date)"
+echo ""
+
+# Parse general.conf.yml
+if command -v yq &>/dev/null; then
+    echo "# General Configuration"
+    echo "export TENANT_DOMAIN=\"$(yq e '.tenant_domain' $GENERAL_CONF)\""
+    echo "export DEPLOYMENT_RUNTIME=\"$(yq e '.deployment_runtime' $GENERAL_CONF)\""
+    echo "export TIMEZONE=\"$(yq e '.timezone' $GENERAL_CONF)\""
+    echo "export TENANT_NAME=\"$(basename $TENANT_PATH)\""
+    echo ""
+else
+    echo "# WARNING: yq not installed, manual parsing required"
+    echo "# Install yq: sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/local/bin/yq"
+fi
+
+# Parse selection.yml for enabled services
+if [ -f "$SELECTION_CONF" ] && command -v yq &>/dev/null; then
+    echo "# Service Selection"
+    yq e '.services | keys | .[]' $SELECTION_CONF | while read service; do
+        enabled=$(yq e ".services.$service.enabled" $SELECTION_CONF)
+        echo "export ENABLE_$(echo $service | tr '[:lower:]' '[:upper:]')=\"$enabled\""
+    done
+    echo ""
+fi
+
+# Add password if exists
+if [ -f "$TENANT_PATH/password.txt" ]; then
+    echo "# Universal Password"
+    echo "export UNIVERSAL_PASSWORD=\"$(cat $TENANT_PATH/password.txt)\""
+fi
+
+EOF
+
+chmod +x ~/convert-tenant-config.sh
+```
+
+**Step 3: Generate and load configuration**
+
+```bash
+# Example: Using the 'test' tenant
+~/convert-tenant-config.sh /path/to/ms-config/tenants/test > ~/.paas-config.env
+
+# Review the generated configuration
+cat ~/.paas-config.env
+
+# Load the configuration
+source ~/.paas-config.env
+
+# Verify environment variables
+env | grep -E "TENANT_|ENABLE_|TIMEZONE"
+```
+
+**Step 4: Initialize and apply with the tenant configuration**
+
+```bash
+# Initialize chezmoi with the loaded config
+chezmoi init --apply https://github.com/KarcsiFarkas/ms-chezmoi
+
+# Or if already initialized, just apply
+chezmoi apply -v
+```
+
+**Example: Using the built-in `test` tenant**
+
+```bash
+# Quick deploy with test tenant (if ms-config is at ../ms-config)
+~/convert-tenant-config.sh ../ms-config/tenants/test > ~/.paas-config.env
+source ~/.paas-config.env
+
+# Verify configuration
+echo "Domain: $TENANT_DOMAIN"
+echo "Runtime: $DEPLOYMENT_RUNTIME"
+echo "Services:"
+env | grep "^ENABLE_" | sed 's/ENABLE_/  - /'
+
+# Deploy
+chezmoi init --apply https://github.com/KarcsiFarkas/ms-chezmoi
+```
+
+**Available test tenant services:**
+- Syncthing (file synchronization)
+- qBittorrent (torrent client)
+- Nextcloud (file sharing & collaboration)
+
 ---
 
 ## Service Selection
