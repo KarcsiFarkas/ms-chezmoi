@@ -11,7 +11,9 @@ A comprehensive dotfiles management solution using [chezmoi](https://www.chezmoi
   - Shell environments (Bash, Zsh with Oh My Zsh support)
   - Git with OS-specific settings
   - Tmux with modern keybindings and themes
-  - Neovim with sensible defaults
+  - Helix editor with sensible defaults
+  - Bat (better cat) for syntax-highlighted file viewing
+  - Vifm file manager for terminal-based navigation
 - **Work Environment Support**: Optional work-specific configurations
 - **Template-Based**: Uses Go templates for dynamic configuration generation
 
@@ -86,8 +88,8 @@ chezmoi-dotfiles/
 │   │   │   └── config.tmpl            # Git configuration
 │   │   ├── tmux/
 │   │   │   └── tmux.conf.tmpl         # Tmux configuration
-│   │   └── nvim/
-│   │       └── init.lua               # Neovim configuration
+│   │   └── helix/
+│   │       └── config.toml            # Helix editor configuration
 │   ├── dot_bashrc.tmpl                # Bash configuration
 │   ├── dot_zshrc.tmpl                 # Zsh configuration
 │   ├── run_onchange_install-packages.sh.tmpl  # Package installation
@@ -111,17 +113,19 @@ The `run_onchange_install-packages.sh.tmpl` script automatically installs essent
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt-get install -y neovim tmux zsh git curl wget build-essential
+# Adds Helix PPA and installs packages
+sudo add-apt-repository -y ppa:maveonair/helix-editor
+sudo apt-get install -y helix vifm bat tmux zsh git curl wget build-essential
 ```
 
 **Arch Linux:**
 ```bash
-sudo pacman -Syu --noconfirm --needed neovim tmux zsh git curl wget base-devel
+sudo pacman -Syu --noconfirm --needed helix vifm bat tmux zsh git curl wget base-devel
 ```
 
 **macOS:**
 ```bash
-brew install neovim tmux zsh git curl wget
+brew install helix vifm bat tmux zsh git curl wget
 ```
 
 **NixOS:**
