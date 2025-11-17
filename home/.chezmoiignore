@@ -4,28 +4,28 @@
 README.md
 
 # OS-specific ignores
-{{- if ne .data.osid "darwin" }}
+{{- if and .osid (ne .osid "darwin") }}
 # Ignore macOS-specific files on non-macOS systems
 .config/macos/
 {{- end }}
 
-{{- if ne .data.osid "linux-ubuntu" }}
+{{- if and .osid (ne .osid "linux-ubuntu") }}
 # Ignore Ubuntu-specific files on non-Ubuntu systems
 .config/ubuntu/
 {{- end }}
 
-{{- if ne .data.osid "linux-arch" }}
+{{- if and .osid (ne .osid "linux-arch") }}
 # Ignore Arch-specific files on non-Arch systems
 .config/arch/
 {{- end }}
 
-{{- if ne .data.osid "linux-nixos" }}
+{{- if and .osid (ne .osid "linux-nixos") }}
 # Ignore NixOS-specific files on non-NixOS systems
 .config/nixos/
 {{- end }}
 
 # Work-specific files (ignore if not work environment)
-{{- if not .data.work }}
+{{- if and (hasKey . "work") (not .work) }}
 .config/git/work.conf
 .zshrc.work
 .bashrc.work

@@ -57,7 +57,14 @@ data:
       enabled: {{ env "ENABLE_LLDAP" | default "true" }}
       jwt_secret: {{ env "LLDAP_JWT_SECRET" | default "changeme_lldap_jwt_secret_min_32_chars" | quote }}
       admin_password: {{ env "LLDAP_ADMIN_PASSWORD" | default "changeme_lldap_admin" | quote }}
-      base_dn: {{ env "LDAP_BASE_DN" | default (printf "dc=%s,dc=%s" (index (splitList "." $domain) 0) (index (splitList "." $domain) 1)) | quote }}
+      {{- $domainParts := splitList "." $domain -}}
+      {{- $baseDn := "" -}}
+      {{- if gt (len $domainParts) 1 -}}
+      {{-   $baseDn = printf "dc=%s,dc=%s" (index $domainParts 0) (index $domainParts 1) -}}
+      {{- else -}}
+      {{-   $baseDn = printf "dc=%s,dc=local" (index $domainParts 0) -}}
+      {{- end }}
+      base_dn: {{ env "LDAP_BASE_DN" | default $baseDn | quote }}
 
     authelia:
       enabled: {{ env "ENABLE_AUTHELIA" | default "true" }}

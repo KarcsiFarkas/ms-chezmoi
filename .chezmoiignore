@@ -21,12 +21,12 @@ docs/
 *.bak
 
 # OS-specific exclusions based on deployment target
-{{ if ne .deployment.runtime "docker" }}
+{{- if and .deployment (ne .deployment.runtime "docker") }}
 # Exclude Docker-specific configs for non-Docker deployments
 opt/docker/
-{{ end }}
+{{- end }}
 
-{{ if ne .deployment.runtime "nix" }}
+{{- if and .deployment (ne .deployment.runtime "nix") }}
 # Exclude NixOS-specific configs for non-Nix deployments
 etc/nixos/
-{{ end }}
+{{- end }}
