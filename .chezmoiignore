@@ -30,3 +30,10 @@ opt/docker/
 # Exclude NixOS-specific configs for non-Nix deployments
 etc/nixos/
 {{- end }}
+
+# Docker deployment folders - Keep only copied-working as default
+{{- if and .deployment (eq .deployment.runtime "docker") }}
+# Exclude template/reference folders - only deploy copied-working
+opt/docker/minimal/
+opt/docker/production/
+{{- end }}

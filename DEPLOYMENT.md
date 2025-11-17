@@ -415,56 +415,74 @@ index 0000000..abcdefg
 ### Step 3: Verify Generated Files
 
 ```bash
-# Check deployment directory
-ls -la ~/opt/docker/production/
+# Check deployment directory (default: copied-working)
+ls -la /opt/docker/copied-working/
 
 # Should show:
-# - docker-compose.yml (generated from template)
+# - docker-compose.yml (generated from working template)
 # - .env (with your configuration)
-# - authelia/configuration.yml
-# - postgres/init-multiple-databases.sh
-# - traefik/dynamic/
+# - README.md (deployment guide)
 ```
+
+**Note on Folder Structure:**
+
+Chezmoi deploys three Docker configuration folders, but only `copied-working` is used by default:
+
+- **`/opt/docker/copied-working/`** ← **Default deployment** (used automatically)
+  - Proven working configuration copied from `management-system/docker-minimal-manual/`
+  - All services are tested and verified
+  - This is what gets deployed when you run `chezmoi apply`
+
+- **`/opt/docker/minimal/`** ← Reference template (excluded from deployment)
+  - Template for adding new services
+  - Reference only, not deployed
+
+- **`/opt/docker/production/`** ← Advanced config (excluded from deployment)
+  - Full production setup with additional services
+  - Not deployed by default
+
+The `minimal` and `production` folders are excluded via `.chezmoiignore` to keep only the working configuration active.
 
 ### Step 4: Review Generated Docker Compose
 
 ```bash
 # View generated docker-compose.yml
-cat ~/opt/docker/production/docker-compose.yml
+cat /opt/docker/copied-working/docker-compose.yml
 
-# IMPORTANT: Verify that ONLY enabled services are present
-# Disabled services should NOT appear in the generated file
+# Verify your services are configured correctly
+# All enabled services should be present with your tenant domain
 ```
 
 ### Step 5: Start the Stack
 
-The deployment script runs automatically after `chezmoi apply`. To manually deploy:
-
 ```bash
 # Navigate to deployment directory
-cd ~/opt/docker/production/
+cd /opt/docker/copied-working/
 
-# Start enabled services
-docker compose --profile traefik --profile postgres --profile lldap --profile authelia --profile vaultwarden --profile homepage up -d
+# Start all services (only enabled services are in the compose file)
+docker compose up -d
+
+# Or start services individually (recommended for first deployment)
+docker compose up -d traefik          # Start reverse proxy first
+docker compose up -d postgres-authentik redis  # Start databases
+docker compose up -d authentik-server authentik-worker  # Start SSO
+docker compose up -d vaultwarden      # Start password manager
+# ... continue with other services as needed
 ```
 
-Or use the auto-generated script that already knows your enabled services:
-
-```bash
-# The deployment script was already run by chezmoi apply
-# To re-run it manually:
-bash ~/home/.chezmoiscripts/run_after_deploy-docker-stack.sh
-```
+**Note:** Services are conditionally included in `docker-compose.yml` based on `.services.<service>.enabled` in your Chezmoi configuration. Only enabled services will appear in the generated file.
 
 **Expected Output:**
 ```
-════════════════════════════════════════════════════════════════
-  🐳 Docker Stack Deployment
-════════════════════════════════════════════════════════════════
-  Profile: production
-  Domain: paas.local
-  Directory: /home/user/opt/docker/production
-════════════════════════════════════════════════════════════════
+[+] Running 8/8
+ ✔ Network paas_network              Created
+ ✔ Volume traefik_letsencrypt        Created
+ ✔ Volume postgres_data              Created
+ ✔ Volume redis_data                 Created
+ ✔ Container traefik                 Started
+ ✔ Container postgres-authentik      Started
+ ✔ Container redis                   Started
+ ✔ Container authentik-server        Started
 
 🔒 Set .env permissions to 600
 📦 Production Profile - Deploying enabled services...

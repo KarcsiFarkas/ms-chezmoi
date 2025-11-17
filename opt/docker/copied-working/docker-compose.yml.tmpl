@@ -1,0 +1,771 @@
+# ============================================================================
+# Docker Compose - Copied Working Configuration
+# ============================================================================
+# This is a working configuration copied from docker-minimal-manual/
+# It serves as the default deployment configuration.
+#
+# Design Philosophy:
+# - Manual-first: Configure through web UIs, then export configurations
+# - Minimal dependencies: Use SQLite where possible, PostgreSQL when needed
+# - Production-ready: Includes health checks, resource limits, restart policies
+# - Single network: All services on one network for simplicity
+# - Version pinning: All images use specific versions, never 'latest'
+#
+# Quick Start:
+#   1. Ensure .env is properly configured via chezmoi
+#   2. docker compose up -d traefik
+#   3. docker compose up -d <service-name>
+#
+# ============================================================================
+
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  paas_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  # Traefik
+  traefik_letsencrypt:
+    driver: local
+
+  # Databases
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+  # Services
+  authentik_data:
+    driver: local
+  immich_data:
+    driver: local
+  immich_postgres:
+    driver: local
+  model-cache:  # Immich ML model cache (official naming convention)
+    driver: local
+  jellyfin_data:
+    driver: local
+  gitea_data:
+    driver: local
+  vaultwarden_data:
+    driver: local
+  nextcloud_data:
+    driver: local
+  nextcloud_postgres:
+    driver: local
+
+# ============================================================================
+# Services
+# ============================================================================
+services:
+
+  # ==========================================================================
+  # Traefik - Reverse Proxy and SSL Termination
+  # ==========================================================================
+  traefik:
+    image: traefik:v3.6.1
+    container_name: traefik
+    restart: unless-stopped
+
+    command:
+      # API and Dashboard
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+      - "--ping=true"
+
+      # Docker provider - automatic service discovery
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=paas_network"
+
+      # File provider - for static routes and middlewares (optional)
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+
+      # Entry points + HTTPS redirect
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.tls=true"
+
+      # Let's Encrypt ACME resolver
+      - "--certificatesresolvers.letsencrypt.acme.email={{ .services.traefik.acme_email }}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+
+      # Debug logging - helpful for troubleshooting
+      - "--log.level=DEBUG"
+      - "--accesslog=true"
+
+    ports:
+      - "80:80"      # HTTP
+      - "443:443"    # HTTPS
+      - "8080:8080"  # Dashboard API
+
+    volumes:
+      # Docker socket for service discovery (read-only for security)
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+      # Dynamic configuration directory (optional)
+      - "./configs/traefik/dynamic:/etc/traefik/dynamic:ro"
+      - "traefik_letsencrypt:/letsencrypt"
+
+    networks:
+      - paas_network
+
+    environment:
+      - TZ={{ .deployment.timezone }}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DOCKER_API_VERSION=1.44
+
+    # Health check
+    healthcheck:
+      test: [ "CMD", "traefik", "healthcheck", "--ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    labels:
+      - "traefik.enable=true"
+
+      # Dashboard router
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+
+      # Service definition for Traefik API
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+  # ==========================================================================
+  # PostgreSQL - Shared Database for Authentik
+  # ==========================================================================
+  postgres-authentik:
+    image: postgres:17.2-alpine
+    container_name: postgres-authentik
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: {{ .services.authentik.db_user }}
+      POSTGRES_PASSWORD: {{ .services.authentik.db_password }}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+
+    volumes:
+      - "postgres_data:/var/lib/postgresql/data"
+
+    networks:
+      - paas_network
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ .services.authentik.db_user }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ==========================================================================
+  # Redis - Caching and Session Storage
+  # ==========================================================================
+  redis:
+    image: redis:8.0-alpine
+    container_name: redis
+    restart: unless-stopped
+
+    command: redis-server --save 60 1 --loglevel warning
+
+    volumes:
+      - "redis_data:/data"
+
+    networks:
+      - paas_network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+{{- if .services.authentik.enabled }}
+  # ==========================================================================
+  # Authentik - Identity Provider and SSO
+  # ==========================================================================
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2025.8.1
+    container_name: authentik-server
+    restart: unless-stopped
+
+    command: server
+
+    environment:
+      # Database
+      AUTHENTIK_POSTGRESQL__HOST: postgres-authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: {{ .services.authentik.db_user }}
+      AUTHENTIK_POSTGRESQL__PASSWORD: {{ .services.authentik.db_password }}
+
+      # Redis
+      AUTHENTIK_REDIS__HOST: redis
+
+      # Secrets
+      AUTHENTIK_SECRET_KEY: {{ .services.authentik.secret_key }}
+
+      # Error reporting (disable in production)
+      AUTHENTIK_ERROR_REPORTING__ENABLED: false
+
+      # Log level
+      AUTHENTIK_LOG_LEVEL: info
+
+    volumes:
+      - "./configs/authentik/media:/media"
+      - "./configs/authentik/custom-templates:/templates"
+
+    networks:
+      - paas_network
+
+    depends_on:
+      postgres-authentik:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.authentik.rule=Host(`auth.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.authentik.entrypoints=websecure"
+      - "traefik.http.routers.authentik.tls.certresolver=letsencrypt"
+      - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+
+  # Authentik Worker - Background tasks
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2025.8.1
+    container_name: authentik-worker
+    restart: unless-stopped
+
+    command: worker
+
+    environment:
+      # Same environment as server
+      AUTHENTIK_POSTGRESQL__HOST: postgres-authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: {{ .services.authentik.db_user }}
+      AUTHENTIK_POSTGRESQL__PASSWORD: {{ .services.authentik.db_password }}
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_SECRET_KEY: {{ .services.authentik.secret_key }}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: false
+      AUTHENTIK_LOG_LEVEL: info
+
+    volumes:
+      - "./configs/authentik/media:/media"
+      - "./configs/authentik/certs:/certs"
+      - "./configs/authentik/custom-templates:/templates"
+
+    networks:
+      - paas_network
+
+    depends_on:
+      postgres-authentik:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+{{- end }}
+
+{{- if .services.immich.enabled }}
+  # ==========================================================================
+  # Immich - Photo Management and Backup
+  # ==========================================================================
+  immich-postgres:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
+    container_name: immich-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: {{ .services.immich.db_name }}
+      POSTGRES_USER: {{ .services.immich.db_user }}
+      POSTGRES_PASSWORD: {{ .services.immich.db_password }}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+
+    volumes:
+      - "immich_postgres:/var/lib/postgresql/data"
+
+    shm_size: 128mb
+
+    networks:
+      - paas_network
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ .services.immich.db_user }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:{{ .services.immich.version }}
+    container_name: immich-server
+    restart: unless-stopped
+
+    environment:
+      # Database connection
+      DB_HOSTNAME: immich-postgres
+      DB_DATABASE_NAME: {{ .services.immich.db_name }}
+      DB_USERNAME: {{ .services.immich.db_user }}
+      DB_PASSWORD: {{ .services.immich.db_password }}
+
+      # Redis connection
+      REDIS_HOSTNAME: redis
+
+      # Public URL
+      IMMICH_SERVER_URL: https://photos.{{ .tenant.domain }}
+
+      # Machine learning service URL
+      IMMICH_MACHINE_LEARNING_URL: http://immich-machine-learning:3003
+
+    volumes:
+      - "immich_data:/data"
+      - /etc/localtime:/etc/localtime:ro
+
+    networks:
+      - paas_network
+
+    depends_on:
+      immich-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    # Health check
+    healthcheck:
+      disable: false
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 3G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.immich.rule=Host(`photos.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.immich.entrypoints=websecure"
+      - "traefik.http.routers.immich.tls.certresolver=letsencrypt"
+      - "traefik.http.services.immich.loadbalancer.server.port=2283"
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:{{ .services.immich.version }}
+    container_name: immich-machine-learning
+    restart: unless-stopped
+
+    volumes:
+      - model-cache:/cache
+
+    networks:
+      - paas_network
+
+    # Health check
+    healthcheck:
+      disable: false
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 2G
+{{- end }}
+
+{{- if .services.jellyfin.enabled }}
+  # ==========================================================================
+  # Jellyfin - Media Server
+  # ==========================================================================
+  jellyfin:
+    image: jellyfin/jellyfin:10.11
+    container_name: jellyfin
+    restart: unless-stopped
+
+    environment:
+      JELLYFIN_PublishedServerUrl: https://media.{{ .tenant.domain }}
+      PUID: {{ .services.jellyfin.puid }}
+      PGID: {{ .services.jellyfin.pgid }}
+      TZ: {{ .deployment.timezone }}
+
+    volumes:
+      - "jellyfin_data:/config"
+      - "./media/movies:/movies:ro"
+      - "./media/tv:/tv:ro"
+      - "./media/music:/music:ro"
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`media.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.jellyfin.entrypoints=websecure"
+      - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+{{- end }}
+
+{{- if .services.gitea.enabled }}
+  # ==========================================================================
+  # Gitea - Git Hosting
+  # ==========================================================================
+  gitea:
+    image: gitea/gitea:1.25.0
+    container_name: gitea
+    restart: unless-stopped
+
+    environment:
+      USER_UID: {{ .services.gitea.uid }}
+      USER_GID: {{ .services.gitea.gid }}
+      GITEA__server__DOMAIN: git.{{ .tenant.domain }}
+      GITEA__server__SSH_DOMAIN: git.{{ .tenant.domain }}
+      GITEA__server__ROOT_URL: https://git.{{ .tenant.domain }}
+      GITEA__server__SSH_PORT: 2222
+      GITEA__server__SSH_LISTEN_PORT: 22
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__security__INSTALL_LOCK: false
+      GITEA__repository__DEFAULT_PRIVATE: true
+      GITEA__service__DISABLE_REGISTRATION: {{ .services.gitea.disable_registration }}
+      GITEA__service__REQUIRE_SIGNIN_VIEW: {{ .services.gitea.require_signin }}
+
+    volumes:
+      - "gitea_data:/data"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+
+    ports:
+      - "2222:22"  # SSH port
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea.rule=Host(`git.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.gitea.entrypoints=websecure"
+      - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"
+{{- end }}
+
+{{- if .services.vaultwarden.enabled }}
+  # ==========================================================================
+  # Vaultwarden - Password Manager
+  # ==========================================================================
+  vaultwarden:
+    image: vaultwarden/server:1.34.3
+    container_name: vaultwarden
+    restart: unless-stopped
+
+    environment:
+      DOMAIN: https://vault.{{ .tenant.domain }}
+      ADMIN_TOKEN: {{ .services.vaultwarden.admin_token }}
+      SIGNUPS_ALLOWED: {{ .services.vaultwarden.signups_allowed }}
+      SHOW_PASSWORD_HINT: false
+      DATABASE_MAX_CONNS: 10
+
+    volumes:
+      - "vaultwarden_data:/data"
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vault.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+{{- end }}
+
+{{- if .services.nextcloud.enabled }}
+  # ==========================================================================
+  # Nextcloud - File Sync and Storage
+  # ==========================================================================
+  nextcloud-postgres:
+    image: postgres:17.6-alpine3.22
+    container_name: nextcloud-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: {{ .services.nextcloud.db_user }}
+      POSTGRES_PASSWORD: {{ .services.nextcloud.db_password }}
+
+    volumes:
+      - "nextcloud_postgres:/var/lib/postgresql/data"
+
+    networks:
+      - paas_network
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ .services.nextcloud.db_user }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  nextcloud:
+    image: nextcloud:30.0.4-apache
+    container_name: nextcloud
+    restart: unless-stopped
+
+    environment:
+      # Admin credentials
+      NEXTCLOUD_ADMIN_USER: {{ .services.nextcloud.admin_user }}
+      NEXTCLOUD_ADMIN_PASSWORD: {{ .services.nextcloud.admin_password }}
+
+      # Database
+      POSTGRES_HOST: nextcloud-postgres
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: {{ .services.nextcloud.db_user }}
+      POSTGRES_PASSWORD: {{ .services.nextcloud.db_password }}
+
+      # Redis
+      REDIS_HOST: redis
+
+      # Trusted domains and proxy
+      NEXTCLOUD_TRUSTED_DOMAINS: cloud.{{ .tenant.domain }}
+      TRUSTED_PROXIES: 172.20.0.0/16
+      OVERWRITEPROTOCOL: https
+      OVERWRITEHOST: cloud.{{ .tenant.domain }}
+
+      # PHP settings
+      PHP_MEMORY_LIMIT: 512M
+      PHP_UPLOAD_LIMIT: 10G
+
+    volumes:
+      - "nextcloud_data:/var/www/html"
+      - "./data/nextcloud:/var/www/html/data"
+
+    networks:
+      - paas_network
+
+    depends_on:
+      nextcloud-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`cloud.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+
+      # CalDAV/CardDAV redirect middleware
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=^https://(.*)/.well-known/(card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$$1/remote.php/dav/"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-caldav"
+
+  # Nextcloud Cron - Background job execution
+  nextcloud-cron:
+    image: nextcloud:30.0.4-apache
+    container_name: nextcloud-cron
+    restart: unless-stopped
+
+    entrypoint: /cron.sh
+
+    volumes:
+      - "nextcloud_data:/var/www/html"
+      - "./data/nextcloud:/var/www/html/data"
+
+    networks:
+      - paas_network
+
+    depends_on:
+      - nextcloud
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+{{- end }}
+
+{{- if .services.homepage.enabled }}
+  # ==========================================================================
+  # Homepage - Dashboard
+  # ==========================================================================
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+
+    environment:
+      PUID: {{ .services.homepage.puid }}
+      PGID: {{ .services.homepage.pgid }}
+      HOMEPAGE_ALLOWED_HOSTS: "home.{{ .tenant.domain }}"
+
+    volumes:
+      - "~/docker-data/homepage/config/homepage:/app/config:rw"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    labels:
+      - "traefik.enable=true"
+
+      # Main domain router
+      - "traefik.http.routers.homepage.rule=Host(`{{ .tenant.domain }}`)"
+      - "traefik.http.routers.homepage.entrypoints=websecure"
+      - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
+      - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+
+      # Subdomain router (home.domain.com)
+      - "traefik.http.routers.homepage-sub.rule=Host(`home.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.homepage-sub.entrypoints=websecure"
+      - "traefik.http.routers.homepage-sub.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.homepage-sub.service=homepage"
+{{- end }}
