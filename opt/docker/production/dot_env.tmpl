@@ -1,0 +1,158 @@
+# ============================================================================
+# Production Environment Configuration - Managed by Chezmoi
+# ============================================================================
+# Domain: {{ .deployment.domain }}
+# Timezone: {{ .deployment.timezone }}
+# Generated: {{ now | date "2006-01-02 15:04:05 MST" }}
+#
+# WARNING: This file contains sensitive credentials. Ensure proper permissions.
+# File permissions will be set to 600 (owner read/write only).
+#
+# NOTE: Only variables for ENABLED services are included in this file.
+# ============================================================================
+
+# ============================================================================
+# GLOBAL SETTINGS
+# ============================================================================
+
+DOMAIN={{ .deployment.domain }}
+TIMEZONE={{ .deployment.timezone | default "UTC" }}
+{{- if .deployment.acme_email }}
+ACME_EMAIL={{ .deployment.acme_email }}
+{{- else }}
+ACME_EMAIL=admin@{{ .deployment.domain }}
+{{- end }}
+
+# Media paths (shared across media services)
+MEDIA_ROOT={{ .deployment.media_root | default "./media" }}
+DOWNLOADS_ROOT={{ .deployment.downloads_root | default "./downloads" }}
+
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+
+# ============================================================================
+# POSTGRESQL - Central Database
+# ============================================================================
+
+POSTGRES_DB={{ .database.postgres.main_db | default "paas_db" }}
+POSTGRES_USER={{ .database.postgres.user | default "paas_user" }}
+POSTGRES_PASSWORD={{ .database.postgres.password }}
+POSTGRES_MULTIPLE_DATABASES={{ .database.postgres.multiple_databases | default "nextcloud,gitlab,immich,vikunja,seafile,vaultwarden" }}
+{{- end }}
+
+{{- if and (index .services "mariadb") (index .services "mariadb" | default dict).enabled }}
+
+# ============================================================================
+# MARIADB - Alternative Database
+# ============================================================================
+
+MYSQL_ROOT_PASSWORD={{ .database.mariadb.root_password }}
+MYSQL_DATABASE={{ .database.mariadb.database | default "paas_db" }}
+MYSQL_USER={{ .database.mariadb.user | default "paas_user" }}
+MYSQL_PASSWORD={{ .database.mariadb.password }}
+{{- end }}
+
+{{- if and (index .services "lldap") (index .services "lldap" | default dict).enabled }}
+
+# ============================================================================
+# LLDAP - Lightweight LDAP for SSO
+# ============================================================================
+
+LLDAP_JWT_SECRET={{ (index .services "lldap").jwt_secret }}
+LLDAP_ADMIN_PASSWORD={{ (index .services "lldap").admin_password }}
+LDAP_BASE_DN={{ (index .services "lldap").base_dn | default (printf "dc=%s,dc=%s" (index (splitList "." .deployment.domain) 0) (index (splitList "." .deployment.domain) 1)) }}
+{{- end }}
+
+{{- if and (index .services "authelia") (index .services "authelia" | default dict).enabled }}
+
+# ============================================================================
+# AUTHELIA - SSO Provider
+# ============================================================================
+
+AUTHELIA_JWT_SECRET={{ (index .services "authelia").jwt_secret }}
+AUTHELIA_SESSION_SECRET={{ (index .services "authelia").session_secret }}
+AUTHELIA_STORAGE_ENCRYPTION_KEY={{ (index .services "authelia").storage_encryption_key }}
+{{- end }}
+
+{{- if and (index .services "nextcloud") (index .services "nextcloud" | default dict).enabled }}
+
+# ============================================================================
+# NEXTCLOUD - File Sync and Storage
+# ============================================================================
+
+NEXTCLOUD_ADMIN_USER={{ (index .services "nextcloud").admin_user | default "admin" }}
+NEXTCLOUD_ADMIN_PASSWORD={{ (index .services "nextcloud").admin_password }}
+NEXTCLOUD_DB={{ (index .services "nextcloud").db_name | default "nextcloud" }}
+{{- end }}
+
+{{- if and (index .services "vaultwarden") (index .services "vaultwarden" | default dict).enabled }}
+
+# ============================================================================
+# VAULTWARDEN - Password Manager
+# ============================================================================
+
+VAULTWARDEN_ADMIN_TOKEN={{ (index .services "vaultwarden").admin_token }}
+WEBSOCKET_ENABLED={{ (index .services "vaultwarden").websocket_enabled | default "true" }}
+SIGNUPS_ALLOWED={{ (index .services "vaultwarden").signups_allowed | default "true" }}
+{{- end }}
+
+{{- if and (index .services "gitlab") (index .services "gitlab" | default dict).enabled }}
+
+# ============================================================================
+# GITLAB - Git Hosting and CI/CD
+# ============================================================================
+
+GITLAB_ROOT_PASSWORD={{ (index .services "gitlab").root_password }}
+{{- end }}
+
+{{- if and (index .services "jellyfin") (index .services "jellyfin" | default dict).enabled }}
+
+# ============================================================================
+# JELLYFIN - Media Server
+# ============================================================================
+
+JELLYFIN_PUID={{ (index .services "jellyfin").puid | default "1000" }}
+JELLYFIN_PGID={{ (index .services "jellyfin").pgid | default "1000" }}
+{{- end }}
+
+{{- if and (index .services "gitea") (index .services "gitea" | default dict).enabled }}
+
+# ============================================================================
+# GITEA - Lightweight Git Hosting
+# ============================================================================
+
+GITEA_UID={{ (index .services "gitea").uid | default "1000" }}
+GITEA_GID={{ (index .services "gitea").gid | default "1000" }}
+GITEA_DISABLE_REGISTRATION={{ (index .services "gitea").disable_registration | default "false" }}
+{{- end }}
+
+{{- if and (index .services "homepage") (index .services "homepage" | default dict).enabled }}
+
+# ============================================================================
+# HOMEPAGE - Dashboard
+# ============================================================================
+
+HOMEPAGE_PUID={{ (index .services "homepage").puid | default "1000" }}
+HOMEPAGE_PGID={{ (index .services "homepage").pgid | default "1000" }}
+{{- end }}
+
+{{- if and (index .services "immich") (index .services "immich" | default dict).enabled }}
+
+# ============================================================================
+# IMMICH - Photo Management
+# ============================================================================
+
+UPLOAD_LOCATION={{ (index .services "immich").upload_location | default "./library" }}
+{{- end }}
+
+{{- if and (index .services "vikunja") (index .services "vikunja" | default dict).enabled }}
+
+# ============================================================================
+# VIKUNJA - Task Management
+# ============================================================================
+
+VIKUNJA_SERVICE_JWTSECRET={{ (index .services "vikunja").jwt_secret }}
+{{- end }}
+
+# ============================================================================
+# End of Configuration
+# ============================================================================

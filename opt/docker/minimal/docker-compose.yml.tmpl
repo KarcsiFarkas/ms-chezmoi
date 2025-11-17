@@ -1,0 +1,247 @@
+# ============================================================================
+# Docker Compose Configuration - Managed by Chezmoi
+# ============================================================================
+# Tenant: {{ .tenant.name }}
+# Domain: {{ .tenant.domain }}
+# Runtime: {{ .deployment.runtime }}
+# Generated: {{ now | date "2006-01-02 15:04:05 MST" }}
+# ============================================================================
+
+version: '3.8'
+
+networks:
+  paas_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  # Traefik
+  traefik_letsencrypt:
+    driver: local
+
+  # Databases
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+  # Services
+  authentik_data:
+    driver: local
+  immich_data:
+    driver: local
+  immich_postgres:
+    driver: local
+  model-cache:
+    driver: local
+  jellyfin_data:
+    driver: local
+  gitea_data:
+    driver: local
+  vaultwarden_data:
+    driver: local
+  nextcloud_data:
+    driver: local
+  nextcloud_postgres:
+    driver: local
+  homepage_data:
+    driver: local
+
+services:
+  # ==========================================================================
+  # Traefik - Reverse Proxy
+  # ==========================================================================
+  traefik:
+    image: traefik:v3.5.4
+    container_name: traefik
+    restart: unless-stopped
+
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=paas_network"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+      - ./configs/traefik/dynamic:/etc/traefik/dynamic:ro
+
+    networks:
+      - paas_network
+
+    environment:
+      - TZ={{ .deployment.timezone }}
+
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+
+{{- if index .services "vaultwarden" }}
+{{- if (index .services "vaultwarden").enabled }}
+
+  # ==========================================================================
+  # Vaultwarden - Password Manager
+  # ==========================================================================
+  vaultwarden:
+    image: vaultwarden/server:1.32.7
+    container_name: vaultwarden
+    restart: unless-stopped
+
+    volumes:
+      - vaultwarden_data:/data
+
+    networks:
+      - paas_network
+
+    environment:
+      - DOMAIN=https://vault.{{ .tenant.domain }}
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
+      - SIGNUPS_ALLOWED=${VAULTWARDEN_SIGNUPS_ALLOWED:-true}
+      - INVITATIONS_ALLOWED=true
+      - SHOW_PASSWORD_HINT=false
+      - TZ={{ .deployment.timezone }}
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/alive"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vault.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+{{- end }}
+{{- end }}
+
+{{- if index .services "homepage" }}
+{{- if (index .services "homepage").enabled }}
+
+  # ==========================================================================
+  # Homepage - Dashboard
+  # ==========================================================================
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v0.9.13
+    container_name: homepage
+    restart: unless-stopped
+
+    volumes:
+      - homepage_data:/app/config
+      - ./configs/homepage:/app/config/custom:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    networks:
+      - paas_network
+
+    environment:
+      - PUID=${HOMEPAGE_PUID:-1000}
+      - PGID=${HOMEPAGE_PGID:-1000}
+      - TZ={{ .deployment.timezone }}
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homepage.rule=Host(`{{ .tenant.domain }}`) || Host(`home.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.homepage.entrypoints=websecure"
+      - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
+      - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+{{- end }}
+{{- end }}
+
+{{- if index .services "gitea" }}
+{{- if (index .services "gitea").enabled }}
+
+  # ==========================================================================
+  # Gitea - Git Hosting
+  # ==========================================================================
+  gitea:
+    image: gitea/gitea:1.22.7
+    container_name: gitea
+    restart: unless-stopped
+
+    volumes:
+      - gitea_data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+    networks:
+      - paas_network
+
+    environment:
+      - USER_UID=${GITEA_UID:-1000}
+      - USER_GID=${GITEA_GID:-1000}
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__server__DOMAIN=git.{{ .tenant.domain }}
+      - GITEA__server__ROOT_URL=https://git.{{ .tenant.domain }}
+      - GITEA__service__DISABLE_REGISTRATION=${GITEA_DISABLE_REGISTRATION:-false}
+      - GITEA__service__REQUIRE_SIGNIN_VIEW=${GITEA_REQUIRE_SIGNIN:-false}
+      - TZ={{ .deployment.timezone }}
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea.rule=Host(`git.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.gitea.entrypoints=websecure"
+      - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"
+{{- end }}
+{{- end }}
+
+{{- if index .services "portainer" }}
+{{- if (index .services "portainer").enabled }}
+
+  # ==========================================================================
+  # Portainer - Docker Management
+  # ==========================================================================
+  portainer:
+    image: portainer/portainer-ce:2.24.1
+    container_name: portainer
+    restart: unless-stopped
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+    networks:
+      - paas_network
+
+    environment:
+      - TZ={{ .deployment.timezone }}
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+{{- end }}
+{{- end }}
