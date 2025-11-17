@@ -26,6 +26,41 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Check required tools
+check_prerequisites() {
+    log_info "Checking required tools..."
+
+    REQUIRED_TOOLS=(bash curl git)
+    OPTIONAL_TOOLS=(jq yq python3 rsync tar docker)
+    MISSING_REQUIRED=()
+    MISSING_OPTIONAL=()
+
+    for tool in "${REQUIRED_TOOLS[@]}"; do
+        if ! command -v "$tool" &>/dev/null; then
+            MISSING_REQUIRED+=("$tool")
+        fi
+    done
+
+    for tool in "${OPTIONAL_TOOLS[@]}"; do
+        if ! command -v "$tool" &>/dev/null; then
+            MISSING_OPTIONAL+=("$tool")
+        fi
+    done
+
+    if [ ${#MISSING_REQUIRED[@]} -gt 0 ]; then
+        log_error "Missing required tools: ${MISSING_REQUIRED[*]}"
+        log_error "Install with: sudo apt-get install ${MISSING_REQUIRED[*]}"
+        exit 1
+    fi
+
+    if [ ${#MISSING_OPTIONAL[@]} -gt 0 ]; then
+        log_warn "Missing optional tools: ${MISSING_OPTIONAL[*]}"
+        log_warn "Some features may not work. Install with: sudo apt-get install ${MISSING_OPTIONAL[*]}"
+    fi
+
+    log_info "Prerequisites check completed"
+}
+
 # Detect OS
 detect_os() {
     if [ -f /etc/os-release ]; then
@@ -104,6 +139,7 @@ main() {
     log_info "Deployment Runtime: {{ .deployment.runtime }}"
     log_info "Target Tenant: {{ .tenant.name }}"
 
+    check_prerequisites
     detect_os
 
     {{- if eq .deployment.runtime "docker" }}
