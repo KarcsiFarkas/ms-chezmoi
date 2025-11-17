@@ -1,19 +1,19 @@
 [user]
-    name = {{ .data.name }}
-    email = {{ .data.email }}
+    name = {{ .name }}
+    email = {{ .email }}
 
 [core]
-{{- if eq .data.osid "linux-arch" }}
-    editor = nvim
+{{- if eq .osid "linux-arch" }}
+    editor = hx
     pager = less -R
-{{- else if eq .data.osid "linux-ubuntu" }}
-    editor = nvim
+{{- else if eq .osid "linux-ubuntu" }}
+    editor = hx
     pager = less -R
-{{- else if eq .data.osid "linux-nixos" }}
-    editor = nvim
+{{- else if eq .osid "linux-nixos" }}
+    editor = hx
     pager = less -R
-{{- else if eq .data.osid "darwin" }}
-    editor = nvim
+{{- else if eq .osid "darwin" }}
+    editor = hx
     pager = less -R
 {{- else }}
     editor = nano
@@ -50,7 +50,7 @@
 [merge]
     tool = vimdiff
 
-{{- if .data.work }}
+{{- if .work }}
 [includeIf "gitdir:~/work/"]
     path = ~/.config/git/work.conf
 {{- end }}

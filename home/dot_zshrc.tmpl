@@ -13,13 +13,13 @@ plugins=(
     history-substring-search
     zsh-autosuggestions
     zsh-syntax-highlighting
-{{- if eq .data.osid "darwin" }}
+{{- if eq .osid "darwin" }}
     macos
     brew
-{{- else if eq .data.osid "linux-ubuntu" }}
+{{- else if eq .osid "linux-ubuntu" }}
     ubuntu
     apt
-{{- else if eq .data.osid "linux-arch" }}
+{{- else if eq .osid "linux-arch" }}
     archlinux
 {{- end }}
 )
@@ -49,19 +49,19 @@ zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 
 # OS-specific configurations
-{{- if eq .data.osid "linux-ubuntu" }}
+{{- if eq .osid "linux-ubuntu" }}
 # Ubuntu-specific settings
 export PATH="$PATH:/snap/bin"
 
-{{- else if eq .data.osid "linux-arch" }}
+{{- else if eq .osid "linux-arch" }}
 # Arch Linux-specific settings
 # Add any Arch-specific paths here
 
-{{- else if eq .data.osid "linux-nixos" }}
+{{- else if eq .osid "linux-nixos" }}
 # NixOS-specific settings
 # Most configuration handled by NixOS configuration.nix
 
-{{- else if eq .data.osid "darwin" }}
+{{- else if eq .osid "darwin" }}
 # macOS-specific settings
 export PATH="/opt/homebrew/bin:$PATH"
 export PATH="/usr/local/bin:$PATH"
@@ -107,7 +107,7 @@ alias nowdate='date +"%d-%m-%Y"'
 alias reload='source ~/.zshrc'
 
 # Editor configuration
-{{- if or (eq .data.osid "linux-arch") (eq .data.osid "linux-ubuntu") (eq .data.osid "linux-nixos") (eq .data.osid "darwin") }}
+{{- if or (eq .osid "linux-arch") (eq .osid "linux-ubuntu") (eq .osid "linux-nixos") (eq .osid "darwin") }}
 alias vi='nvim'
 alias vim='nvim'
 export EDITOR='nvim'
@@ -169,7 +169,7 @@ if [[ -f ~/.zshrc.local ]]; then
 fi
 
 # Load work-specific configuration if in work environment
-{{- if .data.work }}
+{{- if .work }}
 if [[ -f ~/.zshrc.work ]]; then
     source ~/.zshrc.work
 fi

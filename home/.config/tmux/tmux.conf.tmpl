@@ -64,7 +64,7 @@ bind -r L resize-pane -R 5
 setw -g mode-keys vi
 bind -T copy-mode-vi v send-keys -X begin-selection
 
-{{- if eq .data.osid "darwin" }}
+{{- if eq .osid "darwin" }}
 # macOS-specific copy settings
 bind -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "pbcopy"
 bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "pbcopy"
@@ -113,19 +113,19 @@ set -g message-command-style 'bg=#007acc,fg=#ffffff'
 setw -g clock-mode-colour '#007acc'
 
 # OS-specific configurations
-{{- if eq .data.osid "darwin" }}
+{{- if eq .osid "darwin" }}
 # macOS-specific settings
 set -g default-command "reattach-to-user-namespace -l ${SHELL}"
 
-{{- else if eq .data.osid "linux-ubuntu" }}
+{{- else if eq .osid "linux-ubuntu" }}
 # Ubuntu-specific settings
 # Add any Ubuntu-specific tmux settings here
 
-{{- else if eq .data.osid "linux-arch" }}
+{{- else if eq .osid "linux-arch" }}
 # Arch Linux-specific settings
 # Add any Arch-specific tmux settings here
 
-{{- else if eq .data.osid "linux-nixos" }}
+{{- else if eq .osid "linux-nixos" }}
 # NixOS-specific settings
 # Most configuration handled by NixOS configuration.nix
 {{- end }}

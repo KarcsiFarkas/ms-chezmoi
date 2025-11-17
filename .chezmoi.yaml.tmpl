@@ -42,6 +42,10 @@ data:
   osid: {{ $osid | quote }}
   work: {{ env "IS_WORK_ENV" | default "false" | eq "true" }}
 
+  # User information for git config
+  name: {{ env "GIT_USER_NAME" | default "PaaS User" | quote }}
+  email: {{ env "GIT_USER_EMAIL" | default "user@localhost" | quote }}
+
   # Services configuration
   services:
     postgres:

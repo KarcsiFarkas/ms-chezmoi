@@ -24,7 +24,7 @@ fi
 export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
 
 # OS-specific configurations
-{{- if eq .data.osid "linux-ubuntu" }}
+{{- if eq .osid "linux-ubuntu" }}
 # Ubuntu-specific settings
 if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
     . /etc/bash_completion
@@ -33,17 +33,17 @@ fi
 # Snap bin path
 export PATH="$PATH:/snap/bin"
 
-{{- else if eq .data.osid "linux-arch" }}
+{{- else if eq .osid "linux-arch" }}
 # Arch Linux-specific settings
 if [ -f /usr/share/bash-completion/bash_completion ]; then
     . /usr/share/bash-completion/bash_completion
 fi
 
-{{- else if eq .data.osid "linux-nixos" }}
+{{- else if eq .osid "linux-nixos" }}
 # NixOS-specific settings
 # Most configuration handled by NixOS configuration.nix
 
-{{- else if eq .data.osid "darwin" }}
+{{- else if eq .osid "darwin" }}
 # macOS-specific settings
 if [ -f $(brew --prefix)/etc/bash_completion ]; then
     . $(brew --prefix)/etc/bash_completion
@@ -86,7 +86,7 @@ alias now='date +"%T"'
 alias nowdate='date +"%d-%m-%Y"'
 
 # Editor aliases
-{{- if or (eq .data.osid "linux-arch") (eq .data.osid "linux-ubuntu") (eq .data.osid "linux-nixos") (eq .data.osid "darwin") }}
+{{- if or (eq .osid "linux-arch") (eq .osid "linux-ubuntu") (eq .osid "linux-nixos") (eq .osid "darwin") }}
 alias vi='nvim'
 alias vim='nvim'
 export EDITOR='nvim'

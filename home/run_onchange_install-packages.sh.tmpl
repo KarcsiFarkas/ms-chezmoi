@@ -3,7 +3,7 @@
 
 set -eu
 
-{{ if eq .data.osid "linux-ubuntu" -}}
+{{ if eq .osid "linux-ubuntu" -}}
 echo "==> Installing base packages for Ubuntu..."
 sudo apt-get update
 
@@ -35,7 +35,7 @@ if command -v batcat >/dev/null 2>&1 && ! command -v bat >/dev/null 2>&1; then
     ln -sf /usr/bin/batcat ~/.local/bin/bat
 fi
 
-{{ else if eq .data.osid "linux-arch" -}}
+{{ else if eq .osid "linux-arch" -}}
 echo "==> Installing base packages for Arch Linux..."
 sudo pacman -Syu --noconfirm --needed \
     helix \
@@ -48,12 +48,12 @@ sudo pacman -Syu --noconfirm --needed \
     wget \
     base-devel
 
-{{ else if eq .data.osid "linux-nixos" -}}
+{{ else if eq .osid "linux-nixos" -}}
 echo "==> Skipping package installation for NixOS (managed declaratively)."
 echo "==> Add packages to your NixOS configuration or home-manager instead."
 echo "==> Recommended packages: helix, vifm, bat, tmux, zsh, git, curl, wget"
 
-{{ else if eq .data.osid "darwin" -}}
+{{ else if eq .osid "darwin" -}}
 echo "==> Installing base packages for macOS..."
 # Install Homebrew if not present
 if ! command -v brew >/dev/null 2>&1; then
@@ -72,8 +72,8 @@ brew install \
     wget
 
 {{ else -}}
-echo "==> OS ID '{{ .data.osid }}' not recognized for package installation."
+echo "==> OS ID '{{ .osid }}' not recognized for package installation."
 echo "==> Please install packages manually: helix, vifm, bat, tmux, zsh, git, curl, wget"
 {{- end }}
 
-echo "==> Package installation complete for {{ .data.osid }}"
+echo "==> Package installation complete for {{ .osid }}"
