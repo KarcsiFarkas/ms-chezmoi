@@ -6,27 +6,74 @@ set -eu
 {{ if eq .data.osid "linux-ubuntu" -}}
 echo "==> Installing base packages for Ubuntu..."
 sudo apt-get update
-sudo apt-get install -y neovim tmux zsh git curl wget build-essential
+
+# Add Helix editor PPA
+echo "==> Adding Helix editor PPA..."
+if ! grep -q "maveonair/helix-editor" /etc/apt/sources.list.d/*.list 2>/dev/null; then
+    sudo apt-get install -y software-properties-common
+    sudo add-apt-repository -y ppa:maveonair/helix-editor
+    sudo apt-get update
+fi
+
+# Install base packages
+echo "==> Installing core tools..."
+sudo apt-get install -y \
+    helix \
+    vifm \
+    bat \
+    tmux \
+    zsh \
+    git \
+    curl \
+    wget \
+    build-essential
+
+# Create batcat -> bat symlink if needed (Ubuntu packages it as batcat)
+if command -v batcat >/dev/null 2>&1 && ! command -v bat >/dev/null 2>&1; then
+    echo "==> Creating bat symlink..."
+    mkdir -p ~/.local/bin
+    ln -sf /usr/bin/batcat ~/.local/bin/bat
+fi
 
 {{ else if eq .data.osid "linux-arch" -}}
 echo "==> Installing base packages for Arch Linux..."
-sudo pacman -Syu --noconfirm --needed neovim tmux zsh git curl wget base-devel
+sudo pacman -Syu --noconfirm --needed \
+    helix \
+    vifm \
+    bat \
+    tmux \
+    zsh \
+    git \
+    curl \
+    wget \
+    base-devel
 
 {{ else if eq .data.osid "linux-nixos" -}}
 echo "==> Skipping package installation for NixOS (managed declaratively)."
 echo "==> Add packages to your NixOS configuration or home-manager instead."
+echo "==> Recommended packages: helix, vifm, bat, tmux, zsh, git, curl, wget"
 
 {{ else if eq .data.osid "darwin" -}}
 echo "==> Installing base packages for macOS..."
 # Install Homebrew if not present
 if ! command -v brew >/dev/null 2>&1; then
+    echo "==> Installing Homebrew..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
-brew install neovim tmux zsh git curl wget
+
+brew install \
+    helix \
+    vifm \
+    bat \
+    tmux \
+    zsh \
+    git \
+    curl \
+    wget
 
 {{ else -}}
 echo "==> OS ID '{{ .data.osid }}' not recognized for package installation."
-echo "==> Please install packages manually: neovim, tmux, zsh, git, curl, wget"
+echo "==> Please install packages manually: helix, vifm, bat, tmux, zsh, git, curl, wget"
 {{- end }}
 
 echo "==> Package installation complete for {{ .data.osid }}"
