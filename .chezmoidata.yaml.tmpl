@@ -1,0 +1,160 @@
+{{- /* ========================================================================== */ -}}
+{{- /* Chezmoi Data Configuration - PaaS Stack */ -}}
+{{- /* ========================================================================== */ -}}
+{{- /* This file configures all deployment settings and service selections */ -}}
+{{- /* Values can be provided via environment variables or interactive prompts */ -}}
+{{- /* ========================================================================== */ -}}
+
+{{- /* Deployment Profile Selection */ -}}
+{{- $profile := env "DEPLOYMENT_PROFILE" | default "production" -}}
+{{- $domain := env "TENANT_DOMAIN" -}}
+{{- if not $domain -}}
+{{-   $domain = promptString "domain" "Enter your domain (e.g., example.local)" "example.local" -}}
+{{- end -}}
+
+{{- $timezone := env "TIMEZONE" | default "UTC" -}}
+{{- $acmeEmail := env "ACME_EMAIL" | default (printf "admin@%s" $domain) -}}
+
+{{- /* Helper function to generate random secrets */ -}}
+{{- $generateSecret := "openssl rand -base64 32" -}}
+
+{{- /* Tenant Information */ -}}
+tenant:
+  name: {{ env "TENANT_NAME" | default .chezmoi.hostname | quote }}
+  domain: {{ $domain | quote }}
+
+{{- /* Deployment Configuration */ -}}
+deployment:
+  profile: {{ $profile | quote }}
+  domain: {{ $domain | quote }}
+  timezone: {{ $timezone | quote }}
+  acme_email: {{ $acmeEmail | quote }}
+  media_root: {{ env "MEDIA_ROOT" | default "./media" | quote }}
+  downloads_root: {{ env "DOWNLOADS_ROOT" | default "./downloads" | quote }}
+
+{{- /* Database Configuration */ -}}
+database:
+  postgres:
+    main_db: {{ env "POSTGRES_DB" | default "paas_db" | quote }}
+    user: {{ env "POSTGRES_USER" | default "paas_user" | quote }}
+    password: {{ env "POSTGRES_PASSWORD" | default "changeme_postgres_password" | quote }}
+    multiple_databases: "nextcloud,gitlab,immich,vikunja,seafile,vaultwarden"
+
+  mariadb:
+    root_password: {{ env "MYSQL_ROOT_PASSWORD" | default "changeme_mysql_root" | quote }}
+    database: {{ env "MYSQL_DATABASE" | default "paas_db" | quote }}
+    user: {{ env "MYSQL_USER" | default "paas_user" | quote }}
+    password: {{ env "MYSQL_PASSWORD" | default "changeme_mysql_password" | quote }}
+
+{{- /* Services Configuration */ -}}
+{{- /* ========================================================================== */ -}}
+{{- /* Enable/disable services by setting enabled: true/false */ -}}
+{{- /* Configure service-specific settings under each service */ -}}
+{{- /* ========================================================================== */ -}}
+
+services:
+  # ============================================================================
+  # Core Infrastructure Services (Always Enabled)
+  # ============================================================================
+
+  postgres:
+    enabled: {{ env "ENABLE_POSTGRES" | default "true" }}
+
+  redis:
+    enabled: {{ env "ENABLE_REDIS" | default "false" }}
+
+  mariadb:
+    enabled: {{ env "ENABLE_MARIADB" | default "false" }}
+
+  # ============================================================================
+  # Authentication Services
+  # ============================================================================
+
+  lldap:
+    enabled: {{ env "ENABLE_LLDAP" | default "true" }}
+    jwt_secret: {{ env "LLDAP_JWT_SECRET" | default "changeme_lldap_jwt_secret_min_32_chars" | quote }}
+    admin_password: {{ env "LLDAP_ADMIN_PASSWORD" | default "changeme_lldap_admin" | quote }}
+    base_dn: {{ env "LDAP_BASE_DN" | default (printf "dc=%s,dc=%s" (index (splitList "." $domain) 0) (index (splitList "." $domain) 1)) | quote }}
+
+  authelia:
+    enabled: {{ env "ENABLE_AUTHELIA" | default "true" }}
+    jwt_secret: {{ env "AUTHELIA_JWT_SECRET" | default "changeme_authelia_jwt_secret_min_64_chars_recommended" | quote }}
+    session_secret: {{ env "AUTHELIA_SESSION_SECRET" | default "changeme_authelia_session_secret_min_64_chars" | quote }}
+    storage_encryption_key: {{ env "AUTHELIA_STORAGE_KEY" | default "changeme_authelia_storage_key_min_32_chars" | quote }}
+
+  # ============================================================================
+  # File Storage and Sync
+  # ============================================================================
+
+  nextcloud:
+    enabled: {{ env "ENABLE_NEXTCLOUD" | default "false" }}
+    admin_user: {{ env "NEXTCLOUD_ADMIN_USER" | default "admin" | quote }}
+    admin_password: {{ env "NEXTCLOUD_ADMIN_PASSWORD" | default "changeme_nextcloud" | quote }}
+    db_name: "nextcloud"
+    media_path: {{ env "NEXTCLOUD_MEDIA_PATH" | default "./media/nextcloud" | quote }}
+
+  vaultwarden:
+    enabled: {{ env "ENABLE_VAULTWARDEN" | default "true" }}
+    admin_token: {{ env "VAULTWARDEN_ADMIN_TOKEN" | default "changeme_vaultwarden_admin_token" | quote }}
+    websocket_enabled: "true"
+    signups_allowed: {{ env "VAULTWARDEN_SIGNUPS_ALLOWED" | default "true" | quote }}
+
+  # ============================================================================
+  # Development and Version Control
+  # ============================================================================
+
+  gitlab:
+    enabled: {{ env "ENABLE_GITLAB" | default "false" }}
+    root_password: {{ env "GITLAB_ROOT_PASSWORD" | default "changeme_gitlab_root" | quote }}
+
+  gitea:
+    enabled: {{ env "ENABLE_GITEA" | default "false" }}
+    uid: "1000"
+    gid: "1000"
+    disable_registration: {{ env "GITEA_DISABLE_REGISTRATION" | default "false" | quote }}
+
+  # ============================================================================
+  # Media Services
+  # ============================================================================
+
+  jellyfin:
+    enabled: {{ env "ENABLE_JELLYFIN" | default "false" }}
+    puid: "1000"
+    pgid: "1000"
+    media_movies: {{ env "JELLYFIN_MOVIES" | default "./media/movies" | quote }}
+    media_tv: {{ env "JELLYFIN_TV" | default "./media/tv" | quote }}
+    media_music: {{ env "JELLYFIN_MUSIC" | default "./media/music" | quote }}
+
+  immich:
+    enabled: {{ env "ENABLE_IMMICH" | default "false" }}
+    upload_location: "./library"
+    media_path: {{ env "IMMICH_MEDIA_PATH" | default "./media/immich" | quote }}
+
+  # ============================================================================
+  # Dashboard and UI
+  # ============================================================================
+
+  homepage:
+    enabled: {{ env "ENABLE_HOMEPAGE" | default "true" }}
+    puid: "1000"
+    pgid: "1000"
+
+  # ============================================================================
+  # Productivity Tools
+  # ============================================================================
+
+  vikunja:
+    enabled: {{ env "ENABLE_VIKUNJA" | default "false" }}
+    jwt_secret: {{ env "VIKUNJA_JWT_SECRET" | default "changeme_vikunja_jwt_secret" | quote }}
+
+  stirling-pdf:
+    enabled: {{ env "ENABLE_STIRLING_PDF" | default "false" }}
+    enable_security: "false"
+
+{{- /* ========================================================================== */ -}}
+{{- /* Chezmoi System Information */ -}}
+{{- /* ========================================================================== */ -}}
+chezmoi:
+  sourceDir: {{ .chezmoi.sourceDir | quote }}
+  hostname: {{ .chezmoi.hostname | quote }}
+  os: {{ .chezmoi.os | quote }}
