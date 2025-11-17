@@ -90,6 +90,8 @@ services:
 
     environment:
       - TZ={{ .deployment.timezone }}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DOCKER_API_VERSION=${DOCKER_API_VERSION:-1.44}
 
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]

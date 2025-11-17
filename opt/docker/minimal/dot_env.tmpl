@@ -21,9 +21,11 @@ TIMEZONE={{ .deployment.timezone }}
 # TRAEFIK - Reverse Proxy
 # ============================================================================
 
-{{- if index .services "traefik" }}
-{{- if (index .services "traefik").enabled }}
-{{- $traefik := index .services "traefik" }}
+{{- $services := .services | default (dict) -}}
+
+{{- if index $services "traefik" }}
+{{- if (index $services "traefik").enabled }}
+{{- $traefik := index $services "traefik" }}
 TRAEFIK_ACME_EMAIL={{ $traefik.options.TRAEFIK_ACME_EMAIL | default (printf "admin@%s" .tenant.domain) }}
 {{- end }}
 {{- end }}
@@ -32,9 +34,9 @@ TRAEFIK_ACME_EMAIL={{ $traefik.options.TRAEFIK_ACME_EMAIL | default (printf "adm
 # AUTHENTIK - Identity Provider
 # ============================================================================
 
-{{- if index .services "authentik" }}
-{{- if (index .services "authentik").enabled }}
-{{- $authentik := index .services "authentik" }}
+{{- if index $services "authentik" }}
+{{- if (index $services "authentik").enabled }}
+{{- $authentik := index $services "authentik" }}
 AUTHENTIK_DB_USER={{ $authentik.options.AUTHENTIK_DB_USER | default "authentik" }}
 AUTHENTIK_DB_PASSWORD={{ $authentik.options.AUTHENTIK_DB_PASSWORD | default "CHANGE_ME_GENERATE_SECURE_PASSWORD" }}
 AUTHENTIK_SECRET_KEY={{ $authentik.options.AUTHENTIK_SECRET_KEY | default "CHANGE_ME_GENERATE_SECURE_60_BYTE_SECRET" }}
@@ -54,9 +56,9 @@ SMTP_FROM={{ $authentik.options.SMTP_FROM }}
 # IMMICH - Photo Management
 # ============================================================================
 
-{{- if index .services "immich" }}
-{{- if (index .services "immich").enabled }}
-{{- $immich := index .services "immich" }}
+{{- if index $services "immich" }}
+{{- if (index $services "immich").enabled }}
+{{- $immich := index $services "immich" }}
 IMMICH_VERSION={{ $immich.options.IMMICH_VERSION | default "v2" }}
 DB_USERNAME={{ $immich.options.DB_USERNAME | default "postgres" }}
 DB_PASSWORD={{ $immich.options.DB_PASSWORD | default "CHANGE_ME_GENERATE_SECURE_PASSWORD" }}
@@ -80,9 +82,9 @@ IMMICH_ML_PRESET={{ $immich.options.IMMICH_ML_PRESET }}
 # JELLYFIN - Media Server
 # ============================================================================
 
-{{- if index .services "jellyfin" }}
-{{- if (index .services "jellyfin").enabled }}
-{{- $jellyfin := index .services "jellyfin" }}
+{{- if index $services "jellyfin" }}
+{{- if (index $services "jellyfin").enabled }}
+{{- $jellyfin := index $services "jellyfin" }}
 JELLYFIN_PUID={{ $jellyfin.options.JELLYFIN_PUID | default "1000" }}
 JELLYFIN_PGID={{ $jellyfin.options.JELLYFIN_PGID | default "1000" }}
 JELLYFIN_MEDIA_MOVIES={{ $jellyfin.options.JELLYFIN_MEDIA_MOVIES | default "./media/movies" }}
@@ -95,9 +97,9 @@ JELLYFIN_MEDIA_MUSIC={{ $jellyfin.options.JELLYFIN_MEDIA_MUSIC | default "./medi
 # GITEA - Git Hosting
 # ============================================================================
 
-{{- if index .services "gitea" }}
-{{- if (index .services "gitea").enabled }}
-{{- $gitea := index .services "gitea" }}
+{{- if index $services "gitea" }}
+{{- if (index $services "gitea").enabled }}
+{{- $gitea := index $services "gitea" }}
 GITEA_UID={{ $gitea.options.GITEA_UID | default "1000" }}
 GITEA_GID={{ $gitea.options.GITEA_GID | default "1000" }}
 GITEA_DISABLE_REGISTRATION={{ $gitea.options.GITEA_DISABLE_REGISTRATION | default "false" }}
@@ -109,9 +111,9 @@ GITEA_REQUIRE_SIGNIN={{ $gitea.options.GITEA_REQUIRE_SIGNIN | default "false" }}
 # VAULTWARDEN - Password Manager
 # ============================================================================
 
-{{- if index .services "vaultwarden" }}
-{{- if (index .services "vaultwarden").enabled }}
-{{- $vaultwarden := index .services "vaultwarden" }}
+{{- if index $services "vaultwarden" }}
+{{- if (index $services "vaultwarden").enabled }}
+{{- $vaultwarden := index $services "vaultwarden" }}
 VAULTWARDEN_ADMIN_TOKEN={{ $vaultwarden.options.VAULTWARDEN_ADMIN_TOKEN | default "CHANGE_ME_GENERATE_SECURE_ADMIN_TOKEN" }}
 VAULTWARDEN_SIGNUPS_ALLOWED={{ $vaultwarden.options.VAULTWARDEN_SIGNUPS_ALLOWED | default "true" }}
 VAULTWARDEN_DOMAIN={{ $vaultwarden.options.VAULTWARDEN_DOMAIN | default (printf "https://vault.%s" .tenant.domain) }}
@@ -122,9 +124,9 @@ VAULTWARDEN_DOMAIN={{ $vaultwarden.options.VAULTWARDEN_DOMAIN | default (printf 
 # NEXTCLOUD - File Sync and Storage
 # ============================================================================
 
-{{- if index .services "nextcloud" }}
-{{- if (index .services "nextcloud").enabled }}
-{{- $nextcloud := index .services "nextcloud" }}
+{{- if index $services "nextcloud" }}
+{{- if (index $services "nextcloud").enabled }}
+{{- $nextcloud := index $services "nextcloud" }}
 NEXTCLOUD_ADMIN_USER={{ $nextcloud.options.NEXTCLOUD_ADMIN_USER | default "admin" }}
 NEXTCLOUD_ADMIN_PASSWORD={{ $nextcloud.options.NEXTCLOUD_ADMIN_PASSWORD | default "CHANGE_ME_GENERATE_SECURE_PASSWORD" }}
 NEXTCLOUD_DB_USER={{ $nextcloud.options.NEXTCLOUD_DB_USER | default "nextcloud" }}
@@ -140,9 +142,9 @@ NEXTCLOUD_DATA_PATH={{ $nextcloud.options.NEXTCLOUD_DATA_PATH }}
 # HOMEPAGE - Dashboard
 # ============================================================================
 
-{{- if index .services "homepage" }}
-{{- if (index .services "homepage").enabled }}
-{{- $homepage := index .services "homepage" }}
+{{- if index $services "homepage" }}
+{{- if (index $services "homepage").enabled }}
+{{- $homepage := index $services "homepage" }}
 HOMEPAGE_PUID={{ $homepage.options.HOMEPAGE_PUID | default "1000" }}
 HOMEPAGE_PGID={{ $homepage.options.HOMEPAGE_PGID | default "1000" }}
 HOMEPAGE_VAR_DOMAIN={{ .tenant.domain }}
@@ -153,9 +155,9 @@ HOMEPAGE_VAR_DOMAIN={{ .tenant.domain }}
 # TAILSCALE - VPN Mesh Network
 # ============================================================================
 
-{{- if index .services "tailscale" }}
-{{- if (index .services "tailscale").enabled }}
-{{- $tailscale := index .services "tailscale" }}
+{{- if index $services "tailscale" }}
+{{- if (index $services "tailscale").enabled }}
+{{- $tailscale := index $services "tailscale" }}
 TAILSCALE_AUTHKEY={{ $tailscale.options.TAILSCALE_AUTHKEY | default "your-tailscale-auth-key" }}
 TAILSCALE_HOSTNAME={{ $tailscale.options.TAILSCALE_HOSTNAME | default .tenant.name }}
 {{- end }}
