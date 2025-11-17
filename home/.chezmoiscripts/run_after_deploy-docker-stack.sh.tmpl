@@ -2,21 +2,20 @@
 # ============================================================================
 # Docker Stack Deployment Script - Managed by Chezmoi
 # ============================================================================
-# Profile: {{ .deployment.profile }}
-# Domain: {{ .deployment.domain }}
+# Deployment: copied-working (default)
+# Domain: {{ .tenant.domain }}
 # Generated: {{ now | date "2006-01-02 15:04:05 MST" }}
 # ============================================================================
 
 set -e
 
-DEPLOY_PROFILE="{{ .deployment.profile }}"
-DOCKER_DIR="${HOME}/opt/docker/${DEPLOY_PROFILE}"
+DOCKER_DIR="/opt/docker/copied-working"
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  🐳 Docker Stack Deployment"
 echo "════════════════════════════════════════════════════════════════"
-echo "  Profile: ${DEPLOY_PROFILE}"
-echo "  Domain: {{ .deployment.domain }}"
+echo "  Config: copied-working (default)"
+echo "  Domain: {{ .tenant.domain }}"
 echo "  Directory: ${DOCKER_DIR}"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
@@ -53,139 +52,72 @@ fi
 # Set proper permissions on .env file
 chmod 600 .env
 echo "🔒 Set .env permissions to 600"
-
-{{- if eq .deployment.profile "production" }}
-
-# Production profile deployment
-echo "📦 Production Profile - Deploying enabled services..."
 echo ""
 
-# Build list of enabled profiles
-PROFILES=""
-{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
-PROFILES="${PROFILES} --profile postgres"
-{{- end }}
-{{- if and (index .services "lldap") (index .services "lldap" | default dict).enabled }}
-PROFILES="${PROFILES} --profile lldap"
-{{- end }}
-{{- if and (index .services "authelia") (index .services "authelia" | default dict).enabled }}
-PROFILES="${PROFILES} --profile authelia"
-{{- end }}
-{{- if and (index .services "nextcloud") (index .services "nextcloud" | default dict).enabled }}
-PROFILES="${PROFILES} --profile nextcloud"
-{{- end }}
-{{- if and (index .services "vaultwarden") (index .services "vaultwarden" | default dict).enabled }}
-PROFILES="${PROFILES} --profile vaultwarden"
-{{- end }}
-{{- if and (index .services "jellyfin") (index .services "jellyfin" | default dict).enabled }}
-PROFILES="${PROFILES} --profile jellyfin"
-{{- end }}
-{{- if and (index .services "gitlab") (index .services "gitlab" | default dict).enabled }}
-PROFILES="${PROFILES} --profile gitlab"
-{{- end }}
-{{- if and (index .services "gitea") (index .services "gitea" | default dict).enabled }}
-PROFILES="${PROFILES} --profile gitea"
-{{- end }}
-{{- if and (index .services "homepage") (index .services "homepage" | default dict).enabled }}
-PROFILES="${PROFILES} --profile homepage"
-{{- end }}
-{{- if and (index .services "immich") (index .services "immich" | default dict).enabled }}
-PROFILES="${PROFILES} --profile immich"
-{{- end }}
-{{- if and (index .services "redis") (index .services "redis" | default dict).enabled }}
-PROFILES="${PROFILES} --profile redis"
-{{- end }}
-{{- if and (index .services "vikunja") (index .services "vikunja" | default dict).enabled }}
-PROFILES="${PROFILES} --profile vikunja"
-{{- end }}
-{{- if and (index .services "mariadb") (index .services "mariadb" | default dict).enabled }}
-PROFILES="${PROFILES} --profile mariadb"
-{{- end }}
-{{- if and (index .services "stirling-pdf") (index .services "stirling-pdf" | default dict).enabled }}
-PROFILES="${PROFILES} --profile stirling-pdf"
-{{- end }}
-
-# Always include traefik
-PROFILES="--profile traefik ${PROFILES}"
-
-echo "🎯 Enabled profiles:${PROFILES}"
+# Note about the deployment approach
+echo "📦 Deploying enabled services from copied-working configuration..."
+echo ""
+echo "ℹ️  Note: Only enabled services are included in docker-compose.yml"
+echo "   Services are conditionally rendered based on your .chezmoi.yaml.tmpl"
 echo ""
 
 # Pull latest images
 echo "📥 Pulling Docker images..."
-docker compose ${PROFILES} pull
+docker compose pull
 
 echo ""
 echo "🚀 Starting services..."
-docker compose ${PROFILES} up -d
-
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-echo "  ✅ Production Stack Deployed Successfully!"
-echo "════════════════════════════════════════════════════════════════"
-echo ""
-echo "📊 Service URLs:"
-echo "  • Traefik Dashboard: http://localhost:8080"
-{{- if and (index .services "lldap") (index .services "lldap" | default dict).enabled }}
-echo "  • LLDAP: https://ldap.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "authelia") (index .services "authelia" | default dict).enabled }}
-echo "  • Authelia: https://auth.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "nextcloud") (index .services "nextcloud" | default dict).enabled }}
-echo "  • Nextcloud: https://nextcloud.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "vaultwarden") (index .services "vaultwarden" | default dict).enabled }}
-echo "  • Vaultwarden: https://vault.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "jellyfin") (index .services "jellyfin" | default dict).enabled }}
-echo "  • Jellyfin: https://jellyfin.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "gitlab") (index .services "gitlab" | default dict).enabled }}
-echo "  • GitLab: https://gitlab.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "gitea") (index .services "gitea" | default dict).enabled }}
-echo "  • Gitea: https://git.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "homepage") (index .services "homepage" | default dict).enabled }}
-echo "  • Homepage: https://{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "immich") (index .services "immich" | default dict).enabled }}
-echo "  • Immich: https://immich.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "vikunja") (index .services "vikunja" | default dict).enabled }}
-echo "  • Vikunja: https://tasks.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "stirling-pdf") (index .services "stirling-pdf" | default dict).enabled }}
-echo "  • Stirling PDF: https://pdf.{{ .deployment.domain }}"
-{{- end }}
-
-echo ""
-echo "⚠️  Note: For HTTPS to work, add these entries to /etc/hosts:"
-echo "   127.0.0.1 {{ .deployment.domain }}"
-{{- if and (index .services "lldap") (index .services "lldap" | default dict).enabled }}
-echo "   127.0.0.1 ldap.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "authelia") (index .services "authelia" | default dict).enabled }}
-echo "   127.0.0.1 auth.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "nextcloud") (index .services "nextcloud" | default dict).enabled }}
-echo "   127.0.0.1 nextcloud.{{ .deployment.domain }}"
-{{- end }}
-{{- if and (index .services "vaultwarden") (index .services "vaultwarden" | default dict).enabled }}
-echo "   127.0.0.1 vault.{{ .deployment.domain }}"
-{{- end }}
-
-{{- else }}
-
-# Minimal profile deployment
-echo "📦 Minimal Profile - Deploying basic services..."
-docker compose pull
 docker compose up -d
 
 echo ""
-echo "✅ Minimal stack deployed!"
+echo "════════════════════════════════════════════════════════════════"
+echo "  ✅ Docker Stack Deployed Successfully!"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+echo "📊 Service URLs (for enabled services):"
+echo "  • Traefik Dashboard: https://traefik.{{ .tenant.domain }}"
+{{- if .services.authentik.enabled }}
+echo "  • Authentik: https://auth.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.vaultwarden.enabled }}
+echo "  • Vaultwarden: https://vault.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.immich.enabled }}
+echo "  • Immich: https://photos.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.jellyfin.enabled }}
+echo "  • Jellyfin: https://media.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.gitea.enabled }}
+echo "  • Gitea: https://git.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.nextcloud.enabled }}
+echo "  • Nextcloud: https://cloud.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.homepage.enabled }}
+echo "  • Homepage: https://{{ .tenant.domain }} or https://home.{{ .tenant.domain }}"
+{{- end }}
 
+echo ""
+echo "⚠️  Note: For local testing with domain '{{ .tenant.domain }}':"
+echo "   If using localhost, services are available at:"
+echo "     http://localhost:8080 (Traefik dashboard)"
+echo "     http://SERVICE.localhost (e.g., http://vault.localhost)"
+echo ""
+echo "   For custom domains, add to /etc/hosts:"
+echo "     127.0.0.1 {{ .tenant.domain }}"
+echo "     127.0.0.1 traefik.{{ .tenant.domain }}"
+{{- if .services.authentik.enabled }}
+echo "     127.0.0.1 auth.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.vaultwarden.enabled }}
+echo "     127.0.0.1 vault.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.immich.enabled }}
+echo "     127.0.0.1 photos.{{ .tenant.domain }}"
+{{- end }}
+{{- if .services.gitea.enabled }}
+echo "     127.0.0.1 git.{{ .tenant.domain }}"
 {{- end }}
 
 echo ""
