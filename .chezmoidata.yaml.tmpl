@@ -23,6 +23,11 @@ tenant:
   name: {{ env "TENANT_NAME" | default .chezmoi.hostname | quote }}
   domain: {{ $domain | quote }}
 
+{{- /* System/OS Configuration */ -}}
+data:
+  osid: {{ .chezmoi.os | quote }}
+  work: {{ env "IS_WORK_ENV" | default "false" | eq "true" }}
+
 {{- /* Deployment Configuration */ -}}
 deployment:
   profile: {{ $profile | quote }}
