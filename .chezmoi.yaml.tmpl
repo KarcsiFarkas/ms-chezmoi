@@ -36,7 +36,11 @@ data:
 
   # Additional data for templates
   data:
-    osid: {{ if eq .chezmoi.os "linux" }}{{ printf "linux-%s" (index .chezmoi.osRelease "id" | default "unknown") }}{{ else }}{{ .chezmoi.os }}{{ end | quote }}
+    {{- $osid := .chezmoi.os -}}
+    {{- if eq .chezmoi.os "linux" -}}
+    {{-   $osid = printf "linux-%s" (index .chezmoi.osRelease "id" | default "unknown") -}}
+    {{- end }}
+    osid: {{ $osid | quote }}
     work: {{ env "IS_WORK_ENV" | default "false" | eq "true" }}
 
 # Merge strategy for conflicting files
