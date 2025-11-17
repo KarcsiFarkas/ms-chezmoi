@@ -34,14 +34,85 @@ data:
     os: {{ .chezmoi.os | quote }}
     arch: {{ .chezmoi.arch | quote }}
 
-  # Additional data for templates
-  data:
-    {{- $osid := .chezmoi.os -}}
-    {{- if eq .chezmoi.os "linux" -}}
-    {{-   $osid = printf "linux-%s" (index .chezmoi.osRelease "id" | default "unknown") -}}
-    {{- end }}
-    osid: {{ $osid | quote }}
-    work: {{ env "IS_WORK_ENV" | default "false" | eq "true" }}
+  # OS detection
+  {{- $osid := .chezmoi.os -}}
+  {{- if eq .chezmoi.os "linux" -}}
+  {{-   $osid = printf "linux-%s" (index .chezmoi.osRelease "id" | default "unknown") -}}
+  {{- end }}
+  osid: {{ $osid | quote }}
+  work: {{ env "IS_WORK_ENV" | default "false" | eq "true" }}
+
+  # Services configuration
+  services:
+    postgres:
+      enabled: {{ env "ENABLE_POSTGRES" | default "true" }}
+
+    redis:
+      enabled: {{ env "ENABLE_REDIS" | default "false" }}
+
+    mariadb:
+      enabled: {{ env "ENABLE_MARIADB" | default "false" }}
+
+    lldap:
+      enabled: {{ env "ENABLE_LLDAP" | default "true" }}
+      jwt_secret: {{ env "LLDAP_JWT_SECRET" | default "changeme_lldap_jwt_secret_min_32_chars" | quote }}
+      admin_password: {{ env "LLDAP_ADMIN_PASSWORD" | default "changeme_lldap_admin" | quote }}
+      base_dn: {{ env "LDAP_BASE_DN" | default (printf "dc=%s,dc=%s" (index (splitList "." $domain) 0) (index (splitList "." $domain) 1)) | quote }}
+
+    authelia:
+      enabled: {{ env "ENABLE_AUTHELIA" | default "true" }}
+      jwt_secret: {{ env "AUTHELIA_JWT_SECRET" | default "changeme_authelia_jwt_secret_min_64_chars_recommended" | quote }}
+      session_secret: {{ env "AUTHELIA_SESSION_SECRET" | default "changeme_authelia_session_secret_min_64_chars" | quote }}
+      storage_encryption_key: {{ env "AUTHELIA_STORAGE_KEY" | default "changeme_authelia_storage_key_min_32_chars" | quote }}
+
+    nextcloud:
+      enabled: {{ env "ENABLE_NEXTCLOUD" | default "false" }}
+      admin_user: {{ env "NEXTCLOUD_ADMIN_USER" | default "admin" | quote }}
+      admin_password: {{ env "NEXTCLOUD_ADMIN_PASSWORD" | default "changeme_nextcloud" | quote }}
+      db_name: "nextcloud"
+      media_path: {{ env "NEXTCLOUD_MEDIA_PATH" | default "./media/nextcloud" | quote }}
+
+    vaultwarden:
+      enabled: {{ env "ENABLE_VAULTWARDEN" | default "true" }}
+      admin_token: {{ env "VAULTWARDEN_ADMIN_TOKEN" | default "changeme_vaultwarden_admin_token" | quote }}
+      websocket_enabled: "true"
+      signups_allowed: {{ env "VAULTWARDEN_SIGNUPS_ALLOWED" | default "true" | quote }}
+
+    gitlab:
+      enabled: {{ env "ENABLE_GITLAB" | default "false" }}
+      root_password: {{ env "GITLAB_ROOT_PASSWORD" | default "changeme_gitlab_root" | quote }}
+
+    gitea:
+      enabled: {{ env "ENABLE_GITEA" | default "false" }}
+      uid: "1000"
+      gid: "1000"
+      disable_registration: {{ env "GITEA_DISABLE_REGISTRATION" | default "false" | quote }}
+
+    jellyfin:
+      enabled: {{ env "ENABLE_JELLYFIN" | default "false" }}
+      puid: "1000"
+      pgid: "1000"
+      media_movies: {{ env "JELLYFIN_MOVIES" | default "./media/movies" | quote }}
+      media_tv: {{ env "JELLYFIN_TV" | default "./media/tv" | quote }}
+      media_music: {{ env "JELLYFIN_MUSIC" | default "./media/music" | quote }}
+
+    immich:
+      enabled: {{ env "ENABLE_IMMICH" | default "false" }}
+      upload_location: "./library"
+      media_path: {{ env "IMMICH_MEDIA_PATH" | default "./media/immich" | quote }}
+
+    homepage:
+      enabled: {{ env "ENABLE_HOMEPAGE" | default "true" }}
+      puid: "1000"
+      pgid: "1000"
+
+    vikunja:
+      enabled: {{ env "ENABLE_VIKUNJA" | default "false" }}
+      jwt_secret: {{ env "VIKUNJA_JWT_SECRET" | default "changeme_vikunja_jwt_secret" | quote }}
+
+    stirling-pdf:
+      enabled: {{ env "ENABLE_STIRLING_PDF" | default "false" }}
+      enable_security: "false"
 
 # Merge strategy for conflicting files
 merge:
