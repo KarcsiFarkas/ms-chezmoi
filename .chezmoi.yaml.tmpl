@@ -1,0 +1,54 @@
+# Chezmoi Configuration Template
+# This file is generated during deployment initialization
+# DO NOT EDIT MANUALLY - managed by Chezmoi
+
+{{- $tenant := env "TENANT_NAME" | default "default" -}}
+{{- $runtime := env "DEPLOYMENT_RUNTIME" | default "docker" -}}
+{{- $domain := env "TENANT_DOMAIN" | default "localhost" -}}
+{{- $timezone := env "TIMEZONE" | default "UTC" -}}
+
+sourceDir: {{ .chezmoi.sourceDir }}
+destDir: {{ .chezmoi.homeDir }}
+
+# Deployment configuration
+data:
+  # Tenant information
+  tenant:
+    name: {{ $tenant | quote }}
+    domain: {{ $domain | quote }}
+
+  # Deployment settings
+  deployment:
+    runtime: {{ $runtime | quote }}
+    timezone: {{ $timezone | quote }}
+    target_user: {{ env "DEPLOYMENT_USER" | default "paas" | quote }}
+
+  # Infrastructure type detection
+  infra:
+    is_docker: {{ eq $runtime "docker" }}
+    is_nix: {{ eq $runtime "nix" }}
+
+  # System information
+  system:
+    hostname: {{ .chezmoi.hostname | quote }}
+    os: {{ .chezmoi.os | quote }}
+    arch: {{ .chezmoi.arch | quote }}
+
+# Merge strategy for conflicting files
+merge:
+  command: "vimdiff"
+
+# Diff settings
+diff:
+  pager: "less -R"
+
+# Template settings
+template:
+  options:
+    - "missingkey=error"
+
+# Script execution
+hooks:
+  read-source-state:
+    pre:
+      command: ".chezmoiscripts/pre-read.sh"

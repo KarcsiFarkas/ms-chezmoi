@@ -1,0 +1,22 @@
+#!/bin/bash
+# ============================================================================
+# Create Docker Networks - Managed by Chezmoi
+# ============================================================================
+# This script creates required Docker networks for the production stack
+# Generated: {{ now | date "2006-01-02 15:04:05 MST" }}
+# ============================================================================
+
+set -e
+
+echo "🌐 Creating Docker networks..."
+
+# Create traefik_net external network
+if ! docker network inspect traefik_net >/dev/null 2>&1; then
+    echo "  ✓ Creating traefik_net network..."
+    docker network create traefik_net
+    echo "  ✅ traefik_net created"
+else
+    echo "  ℹ️  traefik_net already exists"
+fi
+
+echo "✅ Docker networks ready!"

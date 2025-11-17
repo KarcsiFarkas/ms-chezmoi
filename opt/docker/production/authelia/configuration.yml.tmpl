@@ -1,0 +1,97 @@
+---
+###############################################################
+#                   Authelia configuration                    #
+###############################################################
+# Managed by Chezmoi - Generated {{ now | date "2006-01-02 15:04:05 MST" }}
+# Domain: {{ .deployment.domain }}
+###############################################################
+
+server:
+  host: 0.0.0.0
+  port: 9091
+
+log:
+  level: info
+
+# The secret used to generate JWT tokens when validating user identity by email confirmation.
+jwt_secret: {{ (index .services "authelia").jwt_secret }}
+
+# Default redirection URL
+default_redirection_url: https://{{ .deployment.domain }}
+
+totp:
+  issuer: {{ .deployment.domain }}
+
+# Authentication backend configuration
+authentication_backend:
+{{- if and (index .services "lldap") (index .services "lldap" | default dict).enabled }}
+  # LDAP backend configuration
+  ldap:
+    implementation: custom
+    url: ldap://lldap:3890
+    timeout: 5s
+    start_tls: false
+    tls:
+      skip_verify: false
+      minimum_version: TLS1.2
+    base_dn: {{ (index .services "lldap").base_dn }}
+    username_attribute: uid
+    additional_users_dn: ou=people
+    users_filter: "(&({username_attribute}={input})(objectClass=person))"
+    additional_groups_dn: ou=groups
+    groups_filter: "(member={dn})"
+    group_name_attribute: cn
+    mail_attribute: mail
+    display_name_attribute: displayName
+    user: cn=admin,ou=people,{{ (index .services "lldap").base_dn }}
+    password: {{ (index .services "lldap").admin_password }}
+{{- else }}
+  # File-based authentication (LLDAP not enabled)
+  file:
+    path: /config/users_database.yml
+    password:
+      algorithm: argon2id
+      iterations: 1
+      salt_length: 16
+      parallelism: 8
+      memory: 64
+{{- end }}
+
+# Access Control Configuration
+access_control:
+  default_policy: deny
+  rules:
+    # Rules applied to everyone
+    - domain: auth.{{ .deployment.domain }}
+      policy: bypass
+    - domain: "*.{{ .deployment.domain }}"
+      policy: one_factor
+
+# Session Provider Configuration
+session:
+  name: authelia_session
+  domain: {{ .deployment.domain }}  # Should match whatever your root protected domain is
+  same_site: lax
+  secret: {{ (index .services "authelia").session_secret }}
+  expiration: 1h
+  inactivity: 5m
+  remember_me_duration: 1M
+
+# Regulation Configuration
+regulation:
+  max_retries: 3
+  find_time: 120
+  ban_time: 300
+
+# Storage Provider Configuration
+storage:
+  encryption_key: {{ (index .services "authelia").storage_encryption_key }}
+  local:
+    path: /config/db.sqlite3
+
+# Notification Provider
+notifier:
+  # You can disable the notifier startup check by setting this to true.
+  disable_startup_check: false
+  filesystem:
+    filename: /config/notification.txt

@@ -1,0 +1,537 @@
+# ============================================================================
+# Production Docker Compose - Managed by Chezmoi
+# ============================================================================
+# Profile: production
+# Domain: {{ .deployment.domain }}
+# Generated: {{ now | date "2006-01-02 15:04:05 MST" }}
+#
+# This file contains ALL available services but only ENABLED services
+# will be deployed based on your .chezmoidata.yaml configuration.
+# ============================================================================
+
+version: '3.8'
+
+networks:
+  traefik_net:
+    external: true
+
+volumes:
+  # Shared media volumes for integration
+  media_data:
+  downloads_data:
+  traefik_letsencrypt:
+  # Database volumes
+  postgres_data:
+  mariadb_data:
+  # Service-specific volumes
+  nextcloud_data:
+  gitlab_data:
+  immich_data:
+  plex_data:
+  jellyfin_data:
+  vaultwarden_data:
+  sonarr_data:
+  radarr_data:
+  qbittorrent_data:
+  navidrome_data:
+  seafile_data:
+  syncthing_data:
+  pihole_data:
+  freshrss_data:
+  vikunja_data:
+  firefly_data:
+  homepage_data:
+  lldap_data:
+  authelia_data:
+  redis_data:
+  gitea_data:
+  stirling_pdf_data:
+
+services:
+  # ==========================================================================
+  # TRAEFIK - Reverse Proxy (ALWAYS DEPLOYED)
+  # ==========================================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    profiles: ["traefik"]
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email={{ .deployment.acme_email | default (printf "admin@%s" .deployment.domain) }}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik_letsencrypt:/letsencrypt"
+      - "./traefik/dynamic:/etc/traefik/dynamic:ro"
+    networks:
+      - traefik_net
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+
+  # ==========================================================================
+  # POSTGRESQL - Central Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    profiles:
+      - postgres
+      - database
+{{- if and (index .services "nextcloud") (index .services "nextcloud" | default dict).enabled }}
+      - nextcloud
+{{- end }}
+{{- if and (index .services "gitlab") (index .services "gitlab" | default dict).enabled }}
+      - gitlab
+{{- end }}
+{{- if and (index .services "vaultwarden") (index .services "vaultwarden" | default dict).enabled }}
+      - vaultwarden
+{{- end }}
+{{- if and (index .services "immich") (index .services "immich" | default dict).enabled }}
+      - immich
+{{- end }}
+{{- if and (index .services "vikunja") (index .services "vikunja" | default dict).enabled }}
+      - vikunja
+{{- end }}
+{{- if and (index .services "firefly") (index .services "firefly" | default dict).enabled }}
+      - firefly
+{{- end }}
+{{- if and (index .services "fittracker") (index .services "fittracker" | default dict).enabled }}
+      - fittracker
+{{- end }}
+    environment:
+      - POSTGRES_DB={{ .database.postgres.main_db | default "paas_db" }}
+      - POSTGRES_USER={{ .database.postgres.user | default "paas_user" }}
+      - POSTGRES_PASSWORD={{ .database.postgres.password }}
+      - POSTGRES_MULTIPLE_DATABASES={{ .database.postgres.multiple_databases | default "nextcloud,gitlab,immich,vikunja,seafile,vaultwarden" }}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh:ro
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- end }}
+
+{{- if and (index .services "mariadb") (index .services "mariadb" | default dict).enabled }}
+
+  # ==========================================================================
+  # MARIADB - Alternative Database
+  # ==========================================================================
+  mariadb:
+    image: mariadb:10.11
+    container_name: mariadb
+    profiles: ["mariadb", "database"]
+    environment:
+      - MYSQL_ROOT_PASSWORD={{ .database.mariadb.root_password }}
+      - MYSQL_DATABASE={{ .database.mariadb.database | default "paas_db" }}
+      - MYSQL_USER={{ .database.mariadb.user | default "paas_user" }}
+      - MYSQL_PASSWORD={{ .database.mariadb.password }}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- end }}
+
+{{- if and (index .services "redis") (index .services "redis" | default dict).enabled }}
+
+  # ==========================================================================
+  # REDIS - Cache and Session Storage
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    profiles: ["redis"]
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- end }}
+
+{{- if and (index .services "lldap") (index .services "lldap" | default dict).enabled }}
+
+  # ==========================================================================
+  # LLDAP - Lightweight LDAP for SSO
+  # ==========================================================================
+  lldap:
+    image: lldap/lldap:stable
+    container_name: lldap
+    profiles: ["lldap", "auth"]
+    environment:
+      - LLDAP_JWT_SECRET={{ (index .services "lldap").jwt_secret }}
+      - LLDAP_LDAP_USER_PASS={{ (index .services "lldap").admin_password }}
+      - LLDAP_LDAP_BASE_DN={{ (index .services "lldap").base_dn | default (printf "dc=%s,dc=%s" (index (splitList "." .deployment.domain) 0) (index (splitList "." .deployment.domain) 1)) }}
+    volumes:
+      - lldap_data:/data
+    networks:
+      - traefik_net
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.lldap.rule=Host(`ldap.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.lldap.entrypoints=websecure"
+      - "traefik.http.routers.lldap.tls.certresolver=letsencrypt"
+      - "traefik.http.services.lldap.loadbalancer.server.port=17170"
+{{- end }}
+
+{{- if and (index .services "authelia") (index .services "authelia" | default dict).enabled }}
+
+  # ==========================================================================
+  # AUTHELIA - SSO Provider with 2FA
+  # ==========================================================================
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    profiles: ["authelia", "auth"]
+    volumes:
+      - authelia_data:/config
+      - ./authelia/configuration.yml:/config/configuration.yml:ro
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- if and (index .services "lldap") (index .services "lldap" | default dict).enabled }}
+    depends_on:
+      - lldap
+{{- end }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.authelia.rule=Host(`auth.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.authelia.entrypoints=websecure"
+      - "traefik.http.routers.authelia.tls.certresolver=letsencrypt"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+      - "traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/verify?rd=https://auth.{{ .deployment.domain }}"
+      - "traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
+{{- end }}
+
+{{- if and (index .services "nextcloud") (index .services "nextcloud" | default dict).enabled }}
+
+  # ==========================================================================
+  # NEXTCLOUD - File Sync and Storage
+  # ==========================================================================
+  nextcloud:
+    image: nextcloud:28
+    container_name: nextcloud
+    profiles: ["nextcloud"]
+    environment:
+      - NEXTCLOUD_ADMIN_USER={{ (index .services "nextcloud").admin_user | default "admin" }}
+      - NEXTCLOUD_ADMIN_PASSWORD={{ (index .services "nextcloud").admin_password }}
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB={{ (index .services "nextcloud").db_name | default "nextcloud" }}
+      - POSTGRES_USER={{ .database.postgres.user | default "paas_user" }}
+      - POSTGRES_PASSWORD={{ .database.postgres.password }}
+{{- end }}
+      - NEXTCLOUD_TRUSTED_DOMAINS=nextcloud.{{ .deployment.domain }}
+      - OVERWRITEPROTOCOL=https
+      - OVERWRITEHOST=nextcloud.{{ .deployment.domain }}
+    volumes:
+      - nextcloud_data:/var/www/html
+      - {{ (index .services "nextcloud").media_path | default "./media/nextcloud" }}:/var/www/html/data/shared:rw
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+    depends_on:
+      - postgres
+{{- end }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=^https://(.*)/.well-known/(card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$$1/remote.php/dav/"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-caldav"
+{{- end }}
+
+{{- if and (index .services "vaultwarden") (index .services "vaultwarden" | default dict).enabled }}
+
+  # ==========================================================================
+  # VAULTWARDEN - Password Manager
+  # ==========================================================================
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    profiles: ["vaultwarden"]
+    environment:
+      - DOMAIN=https://vaultwarden.{{ .deployment.domain }}
+      - ADMIN_TOKEN={{ (index .services "vaultwarden").admin_token }}
+      - WEBSOCKET_ENABLED={{ (index .services "vaultwarden").websocket_enabled | default "true" }}
+      - SIGNUPS_ALLOWED={{ (index .services "vaultwarden").signups_allowed | default "true" }}
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+      - DATABASE_URL=postgresql://{{ .database.postgres.user }}:{{ .database.postgres.password }}@postgres/vaultwarden
+{{- end }}
+    volumes:
+      - vaultwarden_data:/data
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+    depends_on:
+      - postgres
+{{- end }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.{{ .deployment.domain }}`) || Host(`vault.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+{{- end }}
+
+{{- if and (index .services "jellyfin") (index .services "jellyfin" | default dict).enabled }}
+
+  # ==========================================================================
+  # JELLYFIN - Media Server
+  # ==========================================================================
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    profiles: ["jellyfin"]
+    environment:
+      - JELLYFIN_PublishedServerUrl=https://jellyfin.{{ .deployment.domain }}
+      - PUID={{ (index .services "jellyfin").puid | default "1000" }}
+      - PGID={{ (index .services "jellyfin").pgid | default "1000" }}
+      - TZ={{ .deployment.timezone | default "UTC" }}
+    volumes:
+      - jellyfin_data:/config
+      - {{ (index .services "jellyfin").media_movies | default "./media/movies" }}:/movies:ro
+      - {{ (index .services "jellyfin").media_tv | default "./media/tv" }}:/tv:ro
+      - {{ (index .services "jellyfin").media_music | default "./media/music" }}:/music:ro
+    networks:
+      - traefik_net
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.jellyfin.entrypoints=websecure"
+      - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+{{- end }}
+
+{{- if and (index .services "gitlab") (index .services "gitlab" | default dict).enabled }}
+
+  # ==========================================================================
+  # GITLAB - Git Hosting and CI/CD
+  # ==========================================================================
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: gitlab
+    profiles: ["gitlab"]
+    environment:
+      - GITLAB_OMNIBUS_CONFIG=|
+          external_url 'https://gitlab.{{ .deployment.domain }}'
+          gitlab_rails['initial_root_password'] = '{{ (index .services "gitlab").root_password }}'
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+          postgresql['enable'] = false
+          gitlab_rails['db_adapter'] = 'postgresql'
+          gitlab_rails['db_encoding'] = 'unicode'
+          gitlab_rails['db_host'] = 'postgres'
+          gitlab_rails['db_port'] = 5432
+          gitlab_rails['db_database'] = 'gitlab'
+          gitlab_rails['db_username'] = '{{ .database.postgres.user }}'
+          gitlab_rails['db_password'] = '{{ .database.postgres.password }}'
+{{- end }}
+          nginx['listen_port'] = 80
+          nginx['listen_https'] = false
+          nginx['proxy_set_headers'] = {
+            "Host" => "$$http_host_with_default",
+            "X-Real-IP" => "$$remote_addr",
+            "X-Forwarded-For" => "$$proxy_add_x_forwarded_for",
+            "X-Forwarded-Proto" => "https",
+            "X-Forwarded-Ssl" => "on"
+          }
+    volumes:
+      - gitlab_data:/var/opt/gitlab
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+    depends_on:
+      - postgres
+{{- end }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitlab.rule=Host(`gitlab.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.gitlab.entrypoints=websecure"
+      - "traefik.http.routers.gitlab.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gitlab.loadbalancer.server.port=80"
+{{- end }}
+
+{{- if and (index .services "gitea") (index .services "gitea" | default dict).enabled }}
+
+  # ==========================================================================
+  # GITEA - Lightweight Git Hosting
+  # ==========================================================================
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    profiles: ["gitea"]
+    environment:
+      - USER_UID={{ (index .services "gitea").uid | default "1000" }}
+      - USER_GID={{ (index .services "gitea").gid | default "1000" }}
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__server__DOMAIN=git.{{ .deployment.domain }}
+      - GITEA__server__ROOT_URL=https://git.{{ .deployment.domain }}
+      - GITEA__service__DISABLE_REGISTRATION={{ (index .services "gitea").disable_registration | default "false" }}
+      - TZ={{ .deployment.timezone | default "UTC" }}
+    volumes:
+      - gitea_data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - traefik_net
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea.rule=Host(`git.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.gitea.entrypoints=websecure"
+      - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"
+{{- end }}
+
+{{- if and (index .services "homepage") (index .services "homepage" | default dict).enabled }}
+
+  # ==========================================================================
+  # HOMEPAGE - Dashboard
+  # ==========================================================================
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    profiles: ["homepage"]
+    environment:
+      - PUID={{ (index .services "homepage").puid | default "1000" }}
+      - PGID={{ (index .services "homepage").pgid | default "1000" }}
+    volumes:
+      - homepage_data:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_net
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homepage.rule=Host(`dashboard.{{ .deployment.domain }}`) || Host(`{{ .deployment.domain }}`)"
+      - "traefik.http.routers.homepage.entrypoints=websecure"
+      - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
+      - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+{{- end }}
+
+{{- if and (index .services "immich") (index .services "immich" | default dict).enabled }}
+
+  # ==========================================================================
+  # IMMICH - Photo Management
+  # ==========================================================================
+  immich:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich
+    profiles: ["immich"]
+    environment:
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+      - DB_HOSTNAME=postgres
+      - DB_USERNAME={{ .database.postgres.user }}
+      - DB_PASSWORD={{ .database.postgres.password }}
+      - DB_DATABASE_NAME=immich
+{{- end }}
+{{- if and (index .services "redis") (index .services "redis" | default dict).enabled }}
+      - REDIS_HOSTNAME=redis
+{{- end }}
+      - UPLOAD_LOCATION={{ (index .services "immich").upload_location | default "./library" }}
+    volumes:
+      - immich_data:/usr/src/app/upload
+      - {{ (index .services "immich").media_path | default "./media/immich" }}:/usr/src/app/upload/library:rw
+    networks:
+      - traefik_net
+    restart: unless-stopped
+    depends_on:
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+      - postgres
+{{- end }}
+{{- if and (index .services "redis") (index .services "redis" | default dict).enabled }}
+      - redis
+{{- end }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.immich.rule=Host(`immich.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.immich.entrypoints=websecure"
+      - "traefik.http.routers.immich.tls.certresolver=letsencrypt"
+      - "traefik.http.services.immich.loadbalancer.server.port=3001"
+{{- end }}
+
+{{- if and (index .services "vikunja") (index .services "vikunja" | default dict).enabled }}
+
+  # ==========================================================================
+  # VIKUNJA - Task Management
+  # ==========================================================================
+  vikunja:
+    image: vikunja/vikunja:latest
+    container_name: vikunja
+    profiles: ["vikunja"]
+    environment:
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+      - VIKUNJA_DATABASE_TYPE=postgres
+      - VIKUNJA_DATABASE_HOST=postgres
+      - VIKUNJA_DATABASE_USER={{ .database.postgres.user }}
+      - VIKUNJA_DATABASE_PASSWORD={{ .database.postgres.password }}
+      - VIKUNJA_DATABASE_DATABASE=vikunja
+{{- end }}
+      - VIKUNJA_SERVICE_JWTSECRET={{ (index .services "vikunja").jwt_secret }}
+      - VIKUNJA_SERVICE_FRONTENDURL=https://vikunja.{{ .deployment.domain }}
+    volumes:
+      - vikunja_data:/app/vikunja/files
+    networks:
+      - traefik_net
+    restart: unless-stopped
+{{- if and (index .services "postgres") (index .services "postgres" | default dict).enabled }}
+    depends_on:
+      - postgres
+{{- end }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vikunja.rule=Host(`vikunja.{{ .deployment.domain }}`) || Host(`tasks.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.vikunja.entrypoints=websecure"
+      - "traefik.http.routers.vikunja.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
+{{- end }}
+
+{{- if and (index .services "stirling-pdf") (index .services "stirling-pdf" | default dict).enabled }}
+
+  # ==========================================================================
+  # STIRLING PDF - PDF Tools
+  # ==========================================================================
+  stirling-pdf:
+    image: frooodle/s-pdf:latest
+    container_name: stirling-pdf
+    profiles: ["stirling-pdf"]
+    environment:
+      - DOCKER_ENABLE_SECURITY={{ (index .services "stirling-pdf").enable_security | default "false" }}
+    volumes:
+      - stirling_pdf_data:/usr/share/tessdata
+    networks:
+      - traefik_net
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stirling-pdf.rule=Host(`pdf.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.stirling-pdf.entrypoints=websecure"
+      - "traefik.http.routers.stirling-pdf.tls.certresolver=letsencrypt"
+      - "traefik.http.services.stirling-pdf.loadbalancer.server.port=8080"
+{{- end }}

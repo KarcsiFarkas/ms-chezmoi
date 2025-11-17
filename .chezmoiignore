@@ -1,0 +1,32 @@
+# Chezmoi Ignore File for PaaS Deployment
+# Files and directories to exclude from Chezmoi management
+
+# Development and IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (should be managed separately)
+README.md
+CHANGELOG.md
+docs/
+
+# Testing and temporary files
+.test/
+.tmp/
+*.backup
+*.bak
+
+# OS-specific exclusions based on deployment target
+{{ if ne .deployment.runtime "docker" }}
+# Exclude Docker-specific configs for non-Docker deployments
+opt/docker/
+{{ end }}
+
+{{ if ne .deployment.runtime "nix" }}
+# Exclude NixOS-specific configs for non-Nix deployments
+etc/nixos/
+{{ end }}
