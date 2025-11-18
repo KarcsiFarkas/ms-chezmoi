@@ -26,13 +26,28 @@ sudo apt-get install -y \
     git \
     curl \
     wget \
-    build-essential
+    build-essential \
+    jq \
+    unzip
 
 # Create batcat -> bat symlink if needed (Ubuntu packages it as batcat)
 if command -v batcat >/dev/null 2>&1 && ! command -v bat >/dev/null 2>&1; then
     echo "==> Creating bat symlink..."
     mkdir -p ~/.local/bin
     ln -sf /usr/bin/batcat ~/.local/bin/bat
+fi
+
+# Install Bitwarden CLI
+if ! command -v bw >/dev/null 2>&1; then
+    echo "==> Installing Bitwarden CLI..."
+    BW_VERSION=$(curl -s https://api.github.com/repos/bitwarden/clients/releases/latest | jq -r '.tag_name' | sed 's/cli-v//')
+    wget "https://github.com/bitwarden/clients/releases/download/cli-v${BW_VERSION}/bw-linux-${BW_VERSION}.zip" -O /tmp/bw.zip
+    sudo unzip -o /tmp/bw.zip -d /usr/local/bin
+    sudo chmod +x /usr/local/bin/bw
+    rm /tmp/bw.zip
+    echo "==> Bitwarden CLI v${BW_VERSION} installed successfully"
+else
+    echo "==> Bitwarden CLI already installed: $(bw --version)"
 fi
 
 {{ else if eq .osid "linux-arch" -}}
@@ -46,12 +61,28 @@ sudo pacman -Syu --noconfirm --needed \
     git \
     curl \
     wget \
-    base-devel
+    base-devel \
+    jq \
+    unzip
+
+# Install Bitwarden CLI from AUR
+if ! command -v bw >/dev/null 2>&1; then
+    echo "==> Installing Bitwarden CLI from AUR..."
+    if command -v yay >/dev/null 2>&1; then
+        yay -S --noconfirm bitwarden-cli
+    elif command -v paru >/dev/null 2>&1; then
+        paru -S --noconfirm bitwarden-cli
+    else
+        echo "==> Warning: No AUR helper found (yay/paru). Install bitwarden-cli manually."
+    fi
+else
+    echo "==> Bitwarden CLI already installed: $(bw --version)"
+fi
 
 {{ else if eq .osid "linux-nixos" -}}
 echo "==> Skipping package installation for NixOS (managed declaratively)."
 echo "==> Add packages to your NixOS configuration or home-manager instead."
-echo "==> Recommended packages: helix, vifm, bat, tmux, zsh, git, curl, wget"
+echo "==> Recommended packages: helix, vifm, bat, tmux, zsh, git, curl, wget, jq, unzip, bitwarden-cli"
 
 {{ else if eq .osid "darwin" -}}
 echo "==> Installing base packages for macOS..."
@@ -69,11 +100,13 @@ brew install \
     zsh \
     git \
     curl \
-    wget
+    wget \
+    jq \
+    bitwarden-cli
 
 {{ else -}}
 echo "==> OS ID '{{ .osid }}' not recognized for package installation."
-echo "==> Please install packages manually: helix, vifm, bat, tmux, zsh, git, curl, wget"
+echo "==> Please install packages manually: helix, vifm, bat, tmux, zsh, git, curl, wget, jq, unzip, bitwarden-cli"
 {{- end }}
 
 echo "==> Package installation complete for {{ .osid }}"
