@@ -1,0 +1,15 @@
+configs/homepage/services.yaml.tmpl
+configs/homepage/settings.yaml.tmpl
+configs/homepage/widgets.yaml.tmpl
+configs/traefik/dynamic/middlewares.yml.tmpl
+configs/traefik/dynamic/tls.yml.tmpl
+configs/traefik/README.md
+DEPLOYMENT_SUMMARY.md
+docker-compose.yml.tmpl
+dot_env.example
+FILE_INDEX.txt
+POST_ANSIBLE_DEPLOY_INTEGRATION.md
+QUICKSTART.md
+README.md
+scripts/prepare-docker-volumes.sh
+scripts/validate-docker-deployment.sh

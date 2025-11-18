@@ -1,0 +1,23 @@
+# ============================================================================
+# Homepage Dashboard - Settings Configuration
+# ============================================================================
+
+title: {{ .tenant.name | default "PaaS Dashboard" }}
+favicon: https://gethomepage.dev/img/favicon.ico
+theme: dark
+color: slate
+target: _blank
+quicklaunch:
+  searchDescriptions: true
+  hideInternetSearch: true
+
+layout:
+  Infrastructure:
+    style: row
+    columns: 3
+  Productivity:
+    style: row
+    columns: 3
+  Media:
+    style: row
+    columns: 3

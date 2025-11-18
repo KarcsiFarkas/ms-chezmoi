@@ -1,0 +1,263 @@
+# ============================================================================
+# PaaS Docker Environment Configuration - Example
+# ============================================================================
+# This file contains ALL environment variables required for the PaaS Docker
+# deployment. Copy this file to .env and fill in your values.
+#
+# IMPORTANT SECURITY NOTES:
+# - Never commit .env file to version control
+# - Use strong, randomly generated passwords (minimum 32 characters)
+# - Rotate credentials regularly
+# - Use unique passwords for each service
+#
+# Template Variables:
+# Variables in {{ }} format are replaced by Chezmoi during deployment
+# Do not modify these unless you're editing the template
+#
+# Generated: {{ now | date "2006-01-02 15:04:05 MST" }}
+# ============================================================================
+
+# ============================================================================
+# CORE CONFIGURATION
+# ============================================================================
+
+# Tenant Configuration
+# Used for domain names, branding, and organization identification
+TENANT_NAME={{ .tenant.name | default "paas-tenant" }}
+TENANT_DOMAIN={{ .tenant.domain | default "example.com" }}
+
+# Deployment Configuration
+DEPLOYMENT_RUNTIME={{ .deployment.runtime | default "docker" }}
+DEPLOYMENT_TIMEZONE={{ .deployment.timezone | default "UTC" }}
+
+# Docker Data Directory
+# All bind mounts will be created under this directory
+# Default: /opt/docker-data
+DOCKER_DATA_DIR={{ .deployment.docker_data_dir | default "/opt/docker-data" }}
+
+# ============================================================================
+# TRAEFIK - Reverse Proxy Configuration
+# ============================================================================
+
+# ACME (Let's Encrypt) Email
+# This email is used for SSL certificate notifications
+# REQUIRED for production deployments
+TRAEFIK_ACME_EMAIL={{ .services.traefik.acme_email | default "admin@example.com" }}
+
+# Dashboard Authentication
+# Generate with: echo $(htpasswd -nb admin YourPasswordHere) | sed -e s/\\$/\\$\\$/g
+# Default: admin:password (CHANGE THIS!)
+TRAEFIK_DASHBOARD_AUTH={{ .services.traefik.dashboard_auth | default "admin:$$apr1$$H6usRDpK$$6r.F8bjNxZ3W9YfNd5V9c1" }}
+
+# ============================================================================
+# REDIS - Cache and Session Storage
+# ============================================================================
+
+# Redis Password
+# Generate with: openssl rand -base64 32
+# REQUIRED - Redis is shared by multiple services
+REDIS_PASSWORD={{ .services.redis.password | default "" }}
+
+# ============================================================================
+# AUTHENTIK - SSO and Identity Provider
+# ============================================================================
+{{- if .services.authentik.enabled }}
+
+# Authentik Database Credentials
+AUTHENTIK_DB_USER={{ .services.authentik.db_user | default "authentik" }}
+AUTHENTIK_DB_PASSWORD={{ .services.authentik.db_password | default "" }}
+
+# Authentik Secret Key
+# Generate with: openssl rand -base64 60
+# REQUIRED - Used for encryption and signing
+AUTHENTIK_SECRET_KEY={{ .services.authentik.secret_key | default "" }}
+
+# Authentik Logging Level
+# Options: debug, info, warning, error
+AUTHENTIK_LOG_LEVEL={{ .services.authentik.log_level | default "info" }}
+{{- end }}
+
+# ============================================================================
+# VAULTWARDEN - Password Manager
+# ============================================================================
+{{- if .services.vaultwarden.enabled }}
+
+# Admin Token
+# Generate with: openssl rand -base64 48
+# Access admin panel at https://vault.{domain}/admin
+VAULTWARDEN_ADMIN_TOKEN={{ .services.vaultwarden.admin_token | default "" }}
+
+# User Registration Settings
+VAULTWARDEN_SIGNUPS_ALLOWED={{ .services.vaultwarden.signups_allowed | default "false" }}
+VAULTWARDEN_SIGNUPS_VERIFY={{ .services.vaultwarden.signups_verify | default "true" }}
+VAULTWARDEN_SIGNUPS_DOMAINS={{ .services.vaultwarden.signups_domains | default .tenant.domain }}
+VAULTWARDEN_INVITATIONS_ALLOWED={{ .services.vaultwarden.invitations_allowed | default "true" }}
+
+# Database URL (optional - uses SQLite by default)
+# For PostgreSQL: postgresql://user:password@postgres:5432/vaultwarden
+VAULTWARDEN_DATABASE_URL={{ .services.vaultwarden.database_url | default "" }}
+
+# Logging Level
+# Options: trace, debug, info, warn, error, off
+VAULTWARDEN_LOG_LEVEL={{ .services.vaultwarden.log_level | default "info" }}
+{{- end }}
+
+# ============================================================================
+# HOMEPAGE - Dashboard
+# ============================================================================
+{{- if .services.homepage.enabled }}
+
+# User and Group IDs for file permissions
+HOMEPAGE_PUID={{ .services.homepage.puid | default "1000" }}
+HOMEPAGE_PGID={{ .services.homepage.pgid | default "1000" }}
+{{- end }}
+
+# ============================================================================
+# NEXTCLOUD - File Storage and Collaboration
+# ============================================================================
+{{- if .services.nextcloud.enabled }}
+
+# Admin Credentials
+# Used for initial setup only
+NEXTCLOUD_ADMIN_USER={{ .services.nextcloud.admin_user | default "admin" }}
+NEXTCLOUD_ADMIN_PASSWORD={{ .services.nextcloud.admin_password | default "" }}
+
+# Database Credentials
+NEXTCLOUD_DB_USER={{ .services.nextcloud.db_user | default "nextcloud" }}
+NEXTCLOUD_DB_PASSWORD={{ .services.nextcloud.db_password | default "" }}
+
+# PHP Configuration
+NEXTCLOUD_PHP_MEMORY={{ .services.nextcloud.php_memory | default "2G" }}
+NEXTCLOUD_PHP_UPLOAD={{ .services.nextcloud.php_upload | default "16G" }}
+{{- end }}
+
+# ============================================================================
+# IMMICH - Photo Management
+# ============================================================================
+{{- if .services.immich.enabled }}
+
+# Database Credentials
+IMMICH_DB_NAME={{ .services.immich.db_name | default "immich" }}
+IMMICH_DB_USER={{ .services.immich.db_user | default "immich" }}
+IMMICH_DB_PASSWORD={{ .services.immich.db_password | default "" }}
+
+# Logging Level
+# Options: verbose, debug, log, warn, error
+IMMICH_LOG_LEVEL={{ .services.immich.log_level | default "log" }}
+{{- end }}
+
+# ============================================================================
+# JELLYFIN - Media Server
+# ============================================================================
+{{- if .services.jellyfin.enabled }}
+
+# User and Group IDs for media file access
+JELLYFIN_PUID={{ .services.jellyfin.puid | default "1000" }}
+JELLYFIN_PGID={{ .services.jellyfin.pgid | default "1000" }}
+{{- end }}
+
+# ============================================================================
+# GITEA - Git Hosting
+# ============================================================================
+{{- if .services.gitea.enabled }}
+
+# User and Group IDs for file permissions
+GITEA_UID={{ .services.gitea.uid | default "1000" }}
+GITEA_GID={{ .services.gitea.gid | default "1000" }}
+
+# Security Tokens
+# Generate with: gitea generate secret SECRET_KEY
+# Generate with: gitea generate secret INTERNAL_TOKEN
+GITEA_SECRET_KEY={{ .services.gitea.secret_key | default "" }}
+GITEA_INTERNAL_TOKEN={{ .services.gitea.internal_token | default "" }}
+
+# Installation Lock
+# Set to true after initial setup to prevent reinstallation
+GITEA_INSTALL_LOCK={{ .services.gitea.install_lock | default "false" }}
+
+# Repository Settings
+GITEA_DEFAULT_PRIVATE={{ .services.gitea.default_private | default "true" }}
+GITEA_ENABLE_PUSH_CREATE={{ .services.gitea.enable_push_create | default "true" }}
+
+# Registration Settings
+GITEA_DISABLE_REGISTRATION={{ .services.gitea.disable_registration | default "false" }}
+GITEA_REQUIRE_SIGNIN={{ .services.gitea.require_signin | default "false" }}
+{{- end }}
+
+# ============================================================================
+# SMTP - Email Configuration (Optional but Recommended)
+# ============================================================================
+# Used by: Authentik, Vaultwarden, Nextcloud, Gitea
+# Leave empty to disable email functionality
+
+# SMTP Server Configuration
+SMTP_HOST={{ .smtp.host | default "" }}
+SMTP_PORT={{ .smtp.port | default "587" }}
+SMTP_SECURITY={{ .smtp.security | default "starttls" }}
+
+# SMTP Authentication
+SMTP_USER={{ .smtp.user | default "" }}
+SMTP_PASSWORD={{ .smtp.password | default "" }}
+
+# SMTP Sender
+SMTP_FROM={{ .smtp.from | default "noreply@${TENANT_DOMAIN}" }}
+
+# SMTP TLS
+SMTP_USE_TLS={{ .smtp.use_tls | default "true" }}
+
+# ============================================================================
+# ADVANCED CONFIGURATION
+# ============================================================================
+
+# Docker API Version
+# Automatically detected, only change if needed
+DOCKER_API_VERSION=1.44
+
+# Compose Project Name
+# Used to prefix container names and networks
+COMPOSE_PROJECT_NAME=paas
+
+# ============================================================================
+# CREDENTIAL GENERATION HELPERS
+# ============================================================================
+# Use these commands to generate secure credentials:
+#
+# Random password (32 chars):
+#   openssl rand -base64 32
+#
+# Random password (48 chars):
+#   openssl rand -base64 48
+#
+# Random password (60 chars for Authentik):
+#   openssl rand -base64 60
+#
+# Traefik dashboard auth (htpasswd format):
+#   echo $(htpasswd -nb admin YourPasswordHere) | sed -e s/\\$/\\$\\$/g
+#
+# Gitea secret key:
+#   docker run --rm gitea/gitea:latest gitea generate secret SECRET_KEY
+#
+# Gitea internal token:
+#   docker run --rm gitea/gitea:latest gitea generate secret INTERNAL_TOKEN
+#
+# ============================================================================
+
+# ============================================================================
+# VALIDATION CHECKLIST
+# ============================================================================
+# Before deploying, ensure you have:
+#
+# [ ] Set TENANT_DOMAIN to your actual domain
+# [ ] Set TRAEFIK_ACME_EMAIL to a valid email address
+# [ ] Generated and set REDIS_PASSWORD
+# [ ] Generated and set all service database passwords
+# [ ] Generated and set AUTHENTIK_SECRET_KEY (if using Authentik)
+# [ ] Generated and set VAULTWARDEN_ADMIN_TOKEN (if using Vaultwarden)
+# [ ] Generated and set GITEA_SECRET_KEY and GITEA_INTERNAL_TOKEN (if using Gitea)
+# [ ] Changed TRAEFIK_DASHBOARD_AUTH from default
+# [ ] Configured SMTP settings (optional but recommended)
+# [ ] Set all PUID/PGID values to match your system user
+# [ ] Verified DOCKER_DATA_DIR exists and has correct permissions
+#
+# Run validation script: ./scripts/validate-docker-deployment.sh
+# ============================================================================
