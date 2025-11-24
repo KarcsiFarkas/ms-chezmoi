@@ -51,6 +51,7 @@ data:
     traefik:
       enabled: {{ env "ENABLE_TRAEFIK" | default "true" }}
       acme_email: {{ env "TRAEFIK_ACME_EMAIL" | default (printf "admin@%s" $domain) | quote }}
+      dashboard_auth: {{ env "TRAEFIK_DASHBOARD_AUTH" | default "admin:$$apr1$$H6usRDpK$$6r.F8bjNxZ3W9YfNd5V9c1" | quote }}
 
     postgres:
       enabled: {{ env "ENABLE_POSTGRES" | default "true" }}

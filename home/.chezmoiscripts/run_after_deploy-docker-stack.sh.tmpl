@@ -9,6 +9,13 @@
 
 set -e
 
+# Skip this script for local deployments (handled by local-chezmoi.py instead)
+if [ "${DEPLOYMENT_TARGET:-}" = "localhost" ]; then
+    echo "ℹ️  Skipping automatic Docker deployment (local deployment mode)"
+    echo "   Docker services will be started by local-chezmoi.py"
+    exit 0
+fi
+
 DOCKER_DIR="/opt/docker/copied-working"
 
 echo "════════════════════════════════════════════════════════════════"
