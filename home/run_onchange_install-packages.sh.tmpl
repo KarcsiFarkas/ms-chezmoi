@@ -40,8 +40,9 @@ fi
 # Install Bitwarden CLI
 if ! command -v bw >/dev/null 2>&1; then
     echo "==> Installing Bitwarden CLI..."
-    BW_VERSION=$(curl -s https://api.github.com/repos/bitwarden/clients/releases/latest | jq -r '.tag_name' | sed 's/cli-v//')
-    wget "https://github.com/bitwarden/clients/releases/download/cli-v${BW_VERSION}/bw-linux-${BW_VERSION}.zip" -O /tmp/bw.zip
+    BW_TAG=$(curl -s https://api.github.com/repos/bitwarden/clients/releases | jq -r '[.[] | select(.tag_name | startswith("cli-v"))] | .[0].tag_name')
+    BW_VERSION=${BW_TAG#cli-v}
+    wget "https://github.com/bitwarden/clients/releases/download/${BW_TAG}/bw-linux-${BW_VERSION}.zip" -O /tmp/bw.zip
     sudo unzip -o /tmp/bw.zip -d /usr/local/bin
     sudo chmod +x /usr/local/bin/bw
     rm /tmp/bw.zip
