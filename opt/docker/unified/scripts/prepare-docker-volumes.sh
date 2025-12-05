@@ -236,11 +236,11 @@ prepare_standard_directories() {
         "${DOCKER_DATA_DIR}/homepage|${OWNER_USER}|${OWNER_GROUP}|755|Homepage data"
         "${DOCKER_DATA_DIR}/homepage/config|${OWNER_USER}|${OWNER_GROUP}|755|Homepage configuration"
 
-        # Nextcloud
-        "${DOCKER_DATA_DIR}/nextcloud|${OWNER_USER}|${OWNER_GROUP}|755|Nextcloud data"
-        "${DOCKER_DATA_DIR}/nextcloud/data|${OWNER_USER}|${OWNER_GROUP}|755|Nextcloud user data"
-        "${DOCKER_DATA_DIR}/nextcloud/config|${OWNER_USER}|${OWNER_GROUP}|755|Nextcloud configuration"
-        "${DOCKER_DATA_DIR}/nextcloud/apps|${OWNER_USER}|${OWNER_GROUP}|755|Nextcloud apps"
+        # Nextcloud - UID 33 is www-data inside the container
+        "${DOCKER_DATA_DIR}/nextcloud|33|33|755|Nextcloud data"
+        "${DOCKER_DATA_DIR}/nextcloud/data|33|33|755|Nextcloud user data"
+        "${DOCKER_DATA_DIR}/nextcloud/config|33|33|755|Nextcloud configuration"
+        "${DOCKER_DATA_DIR}/nextcloud/apps|33|33|755|Nextcloud apps"
 
         # Immich
         "${DOCKER_DATA_DIR}/immich|${OWNER_USER}|${OWNER_GROUP}|755|Immich data"
