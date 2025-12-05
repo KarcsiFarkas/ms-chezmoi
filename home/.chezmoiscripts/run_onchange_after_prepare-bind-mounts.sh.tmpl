@@ -1,0 +1,401 @@
+#!/usr/bin/env bash
+# ============================================================================
+# Dynamic Bind Mount Directory Preparation - Managed by Chezmoi
+# ============================================================================
+# This script creates bind mount directories for Docker containers
+# Only creates directories for services that are enabled in the tenant config
+# Generated: {{ now | date "2006-01-02 15:04:05 MST" }}
+# ============================================================================
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $*"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $*"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $*" >&2
+}
+
+log_step() {
+    echo -e "\n${BLUE}==>${NC} $*\n"
+}
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+DOCKER_BASE_DIR="${HOME}/paas-deployment"
+OWNER_USER="${USER}"
+OWNER_GROUP="$(id -gn)"
+
+# Check if running as root or with sudo
+SUDO_CMD=""
+if [ "$(id -u)" -ne 0 ]; then
+    if command -v sudo &>/dev/null; then
+        SUDO_CMD="sudo"
+    else
+        log_warn "Not running as root and sudo not available. Some operations may fail."
+    fi
+fi
+
+log_step "🗂️  Preparing Bind Mount Directories"
+log_info "Deployment: {{ .tenant.name }} ({{ .tenant.domain }})"
+log_info "Base directory: $DOCKER_BASE_DIR"
+log_info "Owner: ${OWNER_USER}:${OWNER_GROUP}"
+
+# ============================================================================
+# Directory Creation Function
+# ============================================================================
+
+create_directory() {
+    local dir="$1"
+    local perms="${2:-755}"
+    local description="${3:-}"
+
+    # Skip if directory already exists with correct ownership
+    if [ -d "$dir" ]; then
+        local current_owner
+        current_owner=$($SUDO_CMD stat -c '%U:%G' "$dir" 2>/dev/null || echo "unknown:unknown")
+
+        if [ "$current_owner" = "${OWNER_USER}:${OWNER_GROUP}" ]; then
+            log_info "  ✓ Already exists: $dir"
+            return 0
+        else
+            log_warn "  ⚠ Fixing ownership: $dir (was $current_owner)"
+        fi
+    else
+        log_info "  ➕ Creating: $dir${description:+ ($description)}"
+    fi
+
+    # Create directory with parent directories
+    if ! $SUDO_CMD mkdir -p "$dir"; then
+        log_error "Failed to create directory: $dir"
+        return 1
+    fi
+
+    # Set ownership
+    if ! $SUDO_CMD chown "${OWNER_USER}:${OWNER_GROUP}" "$dir"; then
+        log_warn "Failed to set ownership on: $dir"
+    fi
+
+    # Set permissions
+    if ! $SUDO_CMD chmod "$perms" "$dir"; then
+        log_warn "Failed to set permissions on: $dir"
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Core Infrastructure Directories (Always Created)
+# ============================================================================
+
+create_core_directories() {
+    log_step "📦 Creating core infrastructure directories"
+
+    # Base deployment directory
+    create_directory "$DOCKER_BASE_DIR" "755" "Base deployment directory"
+    create_directory "$DOCKER_BASE_DIR/configs" "755" "Configuration root"
+
+    # Traefik - Always needed for reverse proxy
+    log_info "Creating Traefik directories..."
+    create_directory "$DOCKER_BASE_DIR/configs/traefik" "755"
+    create_directory "$DOCKER_BASE_DIR/configs/traefik/dynamic" "755" "Dynamic configuration"
+    create_directory "$DOCKER_BASE_DIR/configs/traefik/certificates" "700" "SSL certificates"
+
+    log_info "✅ Core directories created"
+}
+
+# ============================================================================
+# Service-Specific Directories (Conditional)
+# ============================================================================
+
+{{- if .services.authentik.enabled }}
+create_authentik_directories() {
+    log_step "🔐 Creating Authentik directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/authentik" "755"
+    create_directory "$DOCKER_BASE_DIR/configs/authentik/media" "755" "Media files"
+    create_directory "$DOCKER_BASE_DIR/configs/authentik/custom-templates" "755" "Custom templates"
+    create_directory "$DOCKER_BASE_DIR/configs/authentik/certs" "700" "Certificates"
+
+    log_info "✅ Authentik directories created"
+}
+{{- end }}
+
+{{- if .services.vaultwarden.enabled }}
+create_vaultwarden_directories() {
+    log_step "🔑 Creating Vaultwarden directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/vaultwarden" "755"
+
+    log_info "✅ Vaultwarden directories created"
+}
+{{- end }}
+
+{{- if .services.homepage.enabled }}
+create_homepage_directories() {
+    log_step "🏠 Creating Homepage directories"
+
+    # Homepage uses home directory by default in copied-working
+    create_directory "$HOME/docker-data/homepage" "755"
+    create_directory "$HOME/docker-data/homepage/config" "755"
+    create_directory "$HOME/docker-data/homepage/config/homepage" "755" "Homepage config"
+
+    log_info "✅ Homepage directories created"
+}
+{{- end }}
+
+{{- if .services.nextcloud.enabled }}
+create_nextcloud_directories() {
+    log_step "☁️  Creating Nextcloud directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/nextcloud" "755"
+    create_directory "$DOCKER_BASE_DIR/configs/nextcloud/config" "755" "Nextcloud config"
+    create_directory "$DOCKER_BASE_DIR/configs/nextcloud/custom_apps" "755" "Custom apps"
+
+    # Media path from configuration
+    {{- if .services.nextcloud.media_path }}
+    local media_path="{{ .services.nextcloud.media_path }}"
+    # Expand ~ to home directory
+    media_path="${media_path/#\~/$HOME}"
+    create_directory "$media_path" "755" "Nextcloud data"
+    {{- end }}
+
+    log_info "✅ Nextcloud directories created"
+}
+{{- end }}
+
+{{- if .services.immich.enabled }}
+create_immich_directories() {
+    log_step "📸 Creating Immich directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/immich" "755"
+
+    # Media path from configuration
+    {{- if .services.immich.media_path }}
+    local media_path="{{ .services.immich.media_path }}"
+    media_path="${media_path/#\~/$HOME}"
+    create_directory "$media_path" "755" "Photo library"
+    create_directory "$media_path/upload" "755" "Upload directory"
+    create_directory "$media_path/library" "755" "Library directory"
+    {{- end }}
+
+    log_info "✅ Immich directories created"
+}
+{{- end }}
+
+{{- if .services.jellyfin.enabled }}
+create_jellyfin_directories() {
+    log_step "🎬 Creating Jellyfin directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/jellyfin" "755"
+
+    # Media directories from configuration
+    {{- if .services.jellyfin.media_movies }}
+    local movies_path="{{ .services.jellyfin.media_movies }}"
+    movies_path="${movies_path/#\~/$HOME}"
+    create_directory "$movies_path" "755" "Movies"
+    {{- end }}
+
+    {{- if .services.jellyfin.media_tv }}
+    local tv_path="{{ .services.jellyfin.media_tv }}"
+    tv_path="${tv_path/#\~/$HOME}"
+    create_directory "$tv_path" "755" "TV shows"
+    {{- end }}
+
+    {{- if .services.jellyfin.media_music }}
+    local music_path="{{ .services.jellyfin.media_music }}"
+    music_path="${music_path/#\~/$HOME}"
+    create_directory "$music_path" "755" "Music"
+    {{- end }}
+
+    log_info "✅ Jellyfin directories created"
+}
+{{- end }}
+
+{{- if .services.gitea.enabled }}
+create_gitea_directories() {
+    log_step "🦊 Creating Gitea directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/gitea" "755"
+    create_directory "$DOCKER_BASE_DIR/configs/gitea/data" "755" "Git repositories"
+
+    log_info "✅ Gitea directories created"
+}
+{{- end }}
+
+{{- if .services.gitlab.enabled }}
+create_gitlab_directories() {
+    log_step "🦊 Creating GitLab directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/gitlab" "755"
+    create_directory "$DOCKER_BASE_DIR/configs/gitlab/config" "755" "GitLab config"
+    create_directory "$DOCKER_BASE_DIR/configs/gitlab/logs" "755" "GitLab logs"
+    create_directory "$DOCKER_BASE_DIR/configs/gitlab/data" "755" "GitLab data"
+
+    log_info "✅ GitLab directories created"
+}
+{{- end }}
+
+{{- if .services.vikunja.enabled }}
+create_vikunja_directories() {
+    log_step "✅ Creating Vikunja directories"
+
+    create_directory "$DOCKER_BASE_DIR/configs/vikunja" "755"
+    create_directory "$DOCKER_BASE_DIR/configs/vikunja/files" "755" "Task attachments"
+
+    log_info "✅ Vikunja directories created"
+}
+{{- end }}
+
+# ============================================================================
+# Validation
+# ============================================================================
+
+validate_directories() {
+    log_step "🔍 Validating directory structure"
+
+    local errors=0
+    local warnings=0
+
+    # Check base directory
+    if [ ! -d "$DOCKER_BASE_DIR" ]; then
+        log_error "Base directory does not exist: $DOCKER_BASE_DIR"
+        ((errors++))
+    elif [ ! -w "$DOCKER_BASE_DIR" ]; then
+        log_warn "Base directory is not writable: $DOCKER_BASE_DIR"
+        ((warnings++))
+    fi
+
+    # Check core directories
+    local -a core_dirs=(
+        "$DOCKER_BASE_DIR/configs"
+        "$DOCKER_BASE_DIR/configs/traefik/dynamic"
+    )
+
+    for dir in "${core_dirs[@]}"; do
+        if [ ! -d "$dir" ]; then
+            log_error "Critical directory missing: $dir"
+            ((errors++))
+        fi
+    done
+
+    if [ $errors -gt 0 ]; then
+        log_error "Validation failed: $errors errors, $warnings warnings"
+        return 1
+    elif [ $warnings -gt 0 ]; then
+        log_warn "Validation completed with $warnings warnings"
+    else
+        log_info "✅ All directories validated successfully"
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+main() {
+    log_info "Starting bind mount preparation for tenant: {{ .tenant.name }}"
+    log_info "Domain: {{ .tenant.domain }}"
+    log_info "Runtime: {{ .deployment.runtime }}"
+    echo ""
+
+    # Create core directories (always needed)
+    create_core_directories
+
+    # Create service-specific directories (conditional based on enabled services)
+    {{- if .services.authentik.enabled }}
+    create_authentik_directories
+    {{- end }}
+
+    {{- if .services.vaultwarden.enabled }}
+    create_vaultwarden_directories
+    {{- end }}
+
+    {{- if .services.homepage.enabled }}
+    create_homepage_directories
+    {{- end }}
+
+    {{- if .services.nextcloud.enabled }}
+    create_nextcloud_directories
+    {{- end }}
+
+    {{- if .services.immich.enabled }}
+    create_immich_directories
+    {{- end }}
+
+    {{- if .services.jellyfin.enabled }}
+    create_jellyfin_directories
+    {{- end }}
+
+    {{- if .services.gitea.enabled }}
+    create_gitea_directories
+    {{- end }}
+
+    {{- if .services.gitlab.enabled }}
+    create_gitlab_directories
+    {{- end }}
+
+    {{- if .services.vikunja.enabled }}
+    create_vikunja_directories
+    {{- end }}
+
+    # Validate everything was created correctly
+    validate_directories
+
+    log_step "✅ Bind mount preparation completed successfully!"
+    echo ""
+    log_info "Summary:"
+    log_info "  Base directory: $DOCKER_BASE_DIR"
+    log_info "  Owner: ${OWNER_USER}:${OWNER_GROUP}"
+    log_info "  Enabled services:"
+    {{- if .services.traefik.enabled }}
+    log_info "    ✓ Traefik (reverse proxy)"
+    {{- end }}
+    {{- if .services.authentik.enabled }}
+    log_info "    ✓ Authentik (SSO)"
+    {{- end }}
+    {{- if .services.vaultwarden.enabled }}
+    log_info "    ✓ Vaultwarden (password manager)"
+    {{- end }}
+    {{- if .services.homepage.enabled }}
+    log_info "    ✓ Homepage (dashboard)"
+    {{- end }}
+    {{- if .services.nextcloud.enabled }}
+    log_info "    ✓ Nextcloud (file sync)"
+    {{- end }}
+    {{- if .services.immich.enabled }}
+    log_info "    ✓ Immich (photos)"
+    {{- end }}
+    {{- if .services.jellyfin.enabled }}
+    log_info "    ✓ Jellyfin (media)"
+    {{- end }}
+    {{- if .services.gitea.enabled }}
+    log_info "    ✓ Gitea (git hosting)"
+    {{- end }}
+    {{- if .services.gitlab.enabled }}
+    log_info "    ✓ GitLab (git hosting)"
+    {{- end }}
+    {{- if .services.vikunja.enabled }}
+    log_info "    ✓ Vikunja (tasks)"
+    {{- end }}
+    echo ""
+}
+
+# Run main function
+main "$@"

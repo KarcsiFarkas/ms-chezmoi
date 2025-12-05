@@ -26,7 +26,7 @@ LOG_FILE="${LOG_DIR}/post-ansible-deploy-$(date +%Y%m%d-%H%M%S).log"
 TENANT_CONFIG_DIR=""
 RUNTIME_CONFIG_FILE="/etc/paas/docker-runtime.yaml"
 
-CORE_SERVICES=(traefik authelia vaultwarden)
+CORE_SERVICES=(traefik authentik vaultwarden)
 LANDING_SERVICES=(homepage)
 SELECTED_SERVICES=()
 DOCKER_NETWORKS=()
@@ -58,6 +58,10 @@ log_warn() {
 
 log_error() {
     echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} [ERROR] $*"
+}
+
+log_success() {
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} [SUCCESS] $*"
 }
 
 log_step() {
@@ -97,7 +101,7 @@ validate_arguments() {
     TARGET_USER="$3"
     TENANT_DOMAIN="${4:-localhost}"
     TIMEZONE="${5:-UTC}"
-    TENANT_CONFIG_DIR="/tmp/tenant-${TENANT_NAME}"
+    TENANT_CONFIG_DIR="/tmp/chezmoi-${TENANT_NAME}/tenant-config"
     export TENANT_CONFIG_DIR
 
     log_info "Deployment Parameters:"
@@ -214,6 +218,8 @@ prepare_chezmoi_data() {
     log_step "Preparing Chezmoi data file..."
 
     local data_file="${HOME}/.local/share/chezmoi/.chezmoidata.yaml"
+    mkdir -p "$(dirname "$data_file")"
+    [ -f "$data_file" ] || echo "{}" > "$data_file"
 
     # Export tenant configuration as environment variables
     export TENANT_NAME
@@ -232,7 +238,7 @@ prepare_chezmoi_data() {
             log_info "Processing tenant service selections..."
 
             # Create temporary data file with services
-            python3 <<'EOF'
+            python3 <<EOF
 import yaml
 import os
 import sys
@@ -241,6 +247,9 @@ tenant_dir = os.environ.get('TENANT_CONFIG_DIR')
 if not tenant_dir:
     print("TENANT_CONFIG_DIR is not set", file=sys.stderr)
     sys.exit(1)
+
+# Resolve data file path
+data_file = os.path.expandvars(os.path.expanduser("$data_file"))
 
 # Load tenant selection
 try:
@@ -252,7 +261,7 @@ except Exception as e:
 
 # Load existing data template
 try:
-    with open('$data_file', 'r', encoding='utf-8') as f:
+    with open(data_file, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f) or {}
 except Exception as e:
     print(f"Error loading data template: {e}", file=sys.stderr)
@@ -263,7 +272,7 @@ data['services'] = selection.get('services', {})
 
 # Write updated data file
 try:
-    with open('$data_file', 'w', encoding='utf-8') as f:
+    with open(data_file, 'w', encoding='utf-8') as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     print(f"Successfully updated Chezmoi data with {len(data['services'])} services")
 except Exception as e:
@@ -286,7 +295,7 @@ EOF
 load_runtime_config() {
     if [ ! -f "$RUNTIME_CONFIG_FILE" ]; then
         log_warn "Docker runtime config not found at $RUNTIME_CONFIG_FILE, using defaults"
-        CORE_SERVICES=(traefik authelia vaultwarden)
+        CORE_SERVICES=(traefik authentik vaultwarden)
         LANDING_SERVICES=(homepage)
         DOCKER_NETWORKS=("traefik_net|bridge|true")
         return 0
@@ -313,7 +322,7 @@ print(json.dumps({"core": core, "landing": landing, "networks": networks}))
 PY
     ); then
         log_warn "Failed to parse $RUNTIME_CONFIG_FILE, falling back to defaults"
-        CORE_SERVICES=(traefik authelia vaultwarden)
+        CORE_SERVICES=(traefik authentik vaultwarden)
         LANDING_SERVICES=(homepage)
         DOCKER_NETWORKS=("traefik_net|bridge|true")
         return 0
@@ -323,7 +332,7 @@ PY
     mapfile -t LANDING_SERVICES < <(echo "$runtime_json" | jq -r '.landing[]?' 2>/dev/null || true)
 
     if [ ${#CORE_SERVICES[@]} -eq 0 ]; then
-        CORE_SERVICES=(traefik authelia vaultwarden)
+        CORE_SERVICES=(traefik authentik vaultwarden)
     fi
     if [ ${#LANDING_SERVICES[@]} -eq 0 ]; then
         LANDING_SERVICES=(homepage)
@@ -432,6 +441,67 @@ start_service_group() {
 # Deployment
 # ============================================================================
 
+load_credentials() {
+    log_step "Loading generated credentials..."
+
+    local cred_dir="/tmp/chezmoi-${TENANT_NAME}/credentials"
+    local cred_file="${cred_dir}/credentials.env"
+    local db_cred_file="${cred_dir}/db-credentials.env"
+
+    if [ ! -d "$cred_dir" ]; then
+        log_warn "Credentials directory not found: $cred_dir"
+        log_warn "Using default/placeholder credentials (INSECURE!)"
+        return 0
+    fi
+
+    # Load service credentials (export to make available to chezmoi)
+    if [ -f "$cred_file" ]; then
+        log_info "Loading service credentials from: $cred_file"
+        # Use set -a to auto-export all variables when sourcing
+        set -a
+        # shellcheck disable=SC1090
+        source "$cred_file"
+        # Keep set -a enabled so variables remain exported after function returns
+        local cred_count=$(grep -c '^[^#]' "$cred_file" || echo 0)
+        log_success "Loaded $cred_count credential entries"
+    else
+        log_warn "Service credentials file not found: $cred_file"
+        set -a  # Enable export for remaining variables
+    fi
+
+    # Load database credentials (also exported)
+    if [ -f "$db_cred_file" ]; then
+        log_info "Loading database credentials from: $db_cred_file"
+        # set -a is already enabled, so these will be exported too
+        # shellcheck disable=SC1090
+        source "$db_cred_file"
+        local db_cred_count=$(grep -c '^[^#]' "$db_cred_file" || echo 0)
+        log_success "Loaded $db_cred_count database credential entries"
+    else
+        log_warn "Database credentials file not found: $db_cred_file"
+    fi
+
+    # Note: We deliberately do NOT call 'set +a' here so variables stay exported
+
+    # Verify critical credentials are loaded
+    local missing_creds=()
+
+    # Alias for Postgres naming differences
+    if [ -z "${POSTGRES_PASSWORD:-}" ] && [ -n "${POSTGRES_DB_PASSWORD:-}" ]; then
+        export POSTGRES_PASSWORD="${POSTGRES_DB_PASSWORD}"
+    fi
+
+    if [ -z "${TRAEFIK_PASSWORD:-}" ]; then missing_creds+=("TRAEFIK_PASSWORD"); fi
+    if [ -z "${POSTGRES_PASSWORD:-}" ]; then missing_creds+=("POSTGRES_PASSWORD"); fi
+
+    if [ ${#missing_creds[@]} -gt 0 ]; then
+        log_warn "Missing credentials: ${missing_creds[*]}"
+        log_warn "Deployment may use insecure defaults!"
+    else
+        log_success "✅ All critical credentials loaded"
+    fi
+}
+
 apply_chezmoi_configuration() {
     log_step "Applying Chezmoi configurations..."
 
@@ -441,6 +511,10 @@ apply_chezmoi_configuration() {
 
     # Apply configurations
     log_info "Applying Chezmoi configurations..."
+    # Prevent run_after_deploy-docker-stack.sh from firing before files exist; docker
+    # services are started later in this script.
+    export SKIP_CHEZMOI_DOCKER_DEPLOY="${SKIP_CHEZMOI_DOCKER_DEPLOY:-1}"
+    log_info "Auto docker deploy via Chezmoi scripts disabled (SKIP_CHEZMOI_DOCKER_DEPLOY=${SKIP_CHEZMOI_DOCKER_DEPLOY})"
     if chezmoi apply --verbose; then
         log_info "Chezmoi configurations applied successfully"
     else
@@ -452,13 +526,47 @@ start_docker_services() {
     log_step "Starting Docker services..."
 
     local docker_dir="${HOME}/paas-deployment"
+    # Prevent Docker Compose from interpolating secrets containing '$'
+    export COMPOSE_INTERPOLATION=0
     load_runtime_config
     load_tenant_selections
 
+    # If requested services are not in compose, log and zero them out to avoid "no such service" errors
+    if [ ${#SELECTED_SERVICES[@]} -gt 0 ] && ! docker compose config --services | grep -Eq "$(printf '(%s)' "$(IFS='|'; echo "${SELECTED_SERVICES[*]}")")"; then
+        log_warn "Requested tenant services not present in docker-compose.yml; skipping tenant-selected group"
+        SELECTED_SERVICES=()
+    fi
+
     if [ ! -f "$docker_dir/docker-compose.yml" ]; then
-        log_warn "docker-compose.yml not found at: $docker_dir/docker-compose.yml"
-        log_warn "Skipping Docker service startup"
-        return 0
+        local fallback_unified="/opt/docker/unified/docker-compose.yml"
+        local fallback_copied="/opt/docker/copied-working/docker-compose.yml"
+        local template_path="${HOME}/.local/share/chezmoi/home/paas-deployment/docker-compose.yml.tmpl"
+
+        mkdir -p "$docker_dir"
+
+        if [ -f "$template_path" ]; then
+            log_warn "docker-compose.yml not found at: $docker_dir/docker-compose.yml"
+            log_warn "Rendering docker-compose.yml from template: $template_path"
+            if chezmoi execute-template < "$template_path" > "$docker_dir/docker-compose.yml"; then
+                log_info "Rendered docker-compose.yml via chezmoi execute-template"
+            else
+                log_warn "Failed to render template via chezmoi execute-template"
+            fi
+        fi
+
+        if [ ! -f "$docker_dir/docker-compose.yml" ] && [ -f "$fallback_unified" ]; then
+            log_warn "Using fallback compose from $fallback_unified"
+            cp "$fallback_unified" "$docker_dir/docker-compose.yml"
+        elif [ ! -f "$docker_dir/docker-compose.yml" ] && [ -f "$fallback_copied" ]; then
+            log_warn "Using fallback compose from $fallback_copied"
+            cp "$fallback_copied" "$docker_dir/docker-compose.yml"
+        fi
+
+        if [ ! -f "$docker_dir/docker-compose.yml" ]; then
+            log_warn "docker-compose.yml not found at: $docker_dir/docker-compose.yml"
+            log_warn "Skipping Docker service startup"
+            return 0
+        fi
     fi
 
     cd "$docker_dir"
@@ -469,6 +577,30 @@ start_docker_services() {
         error_exit "Invalid docker-compose.yml configuration" 1
     fi
 
+    # Determine which services actually exist in the compose file and filter arrays accordingly
+    local available_services
+    available_services="$(docker compose config --services | tr '\n' ' ' | sed 's/  */ /g')"
+    filter_services_defined() {
+        local filtered=()
+        for svc in "$@"; do
+            # skip empty entries
+            if [ -z "${svc// /}" ]; then
+                continue
+            fi
+            if echo " $available_services " | grep -q " $svc "; then
+                filtered+=("$svc")
+            else
+                # Emit to stderr so mapfile (stdout) only captures service names
+                printf "[WARN] Skipping service '%s' (not defined in docker-compose.yml)\n" "$svc" 1>&2
+            fi
+        done
+        printf "%s\n" "${filtered[@]}"
+    }
+
+    mapfile -t CORE_SERVICES < <(filter_services_defined "${CORE_SERVICES[@]}")
+    mapfile -t LANDING_SERVICES < <(filter_services_defined "${LANDING_SERVICES[@]}")
+    mapfile -t SELECTED_SERVICES < <(filter_services_defined "${SELECTED_SERVICES[@]}")
+
     # Pull images
     log_info "Pulling Docker images..."
     docker compose pull || log_warn "Some images failed to pull"
@@ -477,7 +609,11 @@ start_docker_services() {
 
     start_service_group "core reverse-proxy stack" "${CORE_SERVICES[@]}"
     start_service_group "landing/Homepage stack" "${LANDING_SERVICES[@]}"
-    start_service_group "tenant-selected services" "${SELECTED_SERVICES[@]}"
+    if [ ${#SELECTED_SERVICES[@]} -gt 0 ]; then
+        start_service_group "tenant-selected services" "${SELECTED_SERVICES[@]}"
+    else
+        log_info "No tenant-selected services to start"
+    fi
 
     # Show service status
     log_info "Service status:"
@@ -522,6 +658,7 @@ main() {
 
     validate_arguments "$@"
     check_prerequisites
+    load_credentials
     initialize_chezmoi
     prepare_chezmoi_data
     apply_chezmoi_configuration
