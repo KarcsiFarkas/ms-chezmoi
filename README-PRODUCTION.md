@@ -123,7 +123,7 @@ ms-chezmoi/
 |---------|----------------|-------------|
 | **Nextcloud** | `ENABLE_NEXTCLOUD=true` | `nextcloud.{domain}` |
 | **GitLab** | `ENABLE_GITLAB=true` | `gitlab.{domain}` |
-| **Gitea** | `ENABLE_GITEA=true` | `git.{domain}` |
+| **Gitea** | `ENABLE_GITEA=true` | `gitea.{domain}` |
 | **Jellyfin** | `ENABLE_JELLYFIN=true` | `jellyfin.{domain}` |
 | **Immich** | `ENABLE_IMMICH=true` | `immich.{domain}` |
 | **Vikunja** | `ENABLE_VIKUNJA=true` | `tasks.{domain}` |

@@ -164,7 +164,7 @@ Open your browser and navigate to:
 | Nextcloud | `https://cloud.example.com` | admin / (from .env) |
 | Immich | `https://photos.example.com` | Create account |
 | Jellyfin | `https://media.example.com` | Setup wizard |
-| Gitea | `https://git.example.com` | Setup wizard |
+| Gitea | `https://gitea.example.com` | Setup wizard |
 
 ## Initial Service Configuration
 

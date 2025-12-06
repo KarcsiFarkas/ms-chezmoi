@@ -390,8 +390,10 @@ services:
       - USER_UID={{ (index .services "gitea").uid | default "1000" }}
       - USER_GID={{ (index .services "gitea").gid | default "1000" }}
       - GITEA__database__DB_TYPE=sqlite3
-      - GITEA__server__DOMAIN=git.{{ .deployment.domain }}
-      - GITEA__server__ROOT_URL=https://git.{{ .deployment.domain }}
+      - GITEA__server__DOMAIN=gitea.{{ .deployment.domain }}
+      - GITEA__server__ROOT_URL=https://gitea.{{ .deployment.domain }}/
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__log__ROOT_PATH=/data/gitea/log
       - GITEA__service__DISABLE_REGISTRATION={{ (index .services "gitea").disable_registration | default "false" }}
       - TZ={{ .deployment.timezone | default "UTC" }}
     volumes:
@@ -403,7 +405,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gitea.rule=Host(`git.{{ .deployment.domain }}`)"
+      - "traefik.http.routers.gitea.rule=Host(`gitea.{{ .deployment.domain }}`)"
       - "traefik.http.routers.gitea.entrypoints=websecure"
       - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
       - "traefik.http.services.gitea.loadbalancer.server.port=3000"

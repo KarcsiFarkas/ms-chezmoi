@@ -22,6 +22,7 @@ sudo apt-get install -y \
     vifm \
     bat \
     tmux \
+    fzf \
     zsh \
     git \
     curl \
@@ -49,6 +50,30 @@ if ! command -v bw >/dev/null 2>&1; then
     echo "==> Bitwarden CLI v${BW_VERSION} installed successfully"
 else
     echo "==> Bitwarden CLI already installed: $(bw --version)"
+fi
+
+# Install Lazydocker (requires Docker)
+if ! command -v lazydocker >/dev/null 2>&1; then
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "==> Docker not found; skipping Lazydocker install. Install Docker and re-run chezmoi apply."
+    else
+        echo "==> Installing Lazydocker..."
+        LAZYDOCKER_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazydocker/releases/latest" | grep -Po '"tag_name": "v\\K[0-9.]+' || true)
+        if [ -z "${LAZYDOCKER_VERSION}" ]; then
+            echo "==> Could not determine latest Lazydocker version; skipping install."
+        else
+            LAZYDOCKER_TMP_DIR=$(mktemp -d)
+            LAZYDOCKER_ARCHIVE="${LAZYDOCKER_TMP_DIR}/lazydocker.tar.gz"
+            curl -Lo "${LAZYDOCKER_ARCHIVE}" "https://github.com/jesseduffield/lazydocker/releases/download/v${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION}_Linux_x86_64.tar.gz"
+            tar xf "${LAZYDOCKER_ARCHIVE}" -C "${LAZYDOCKER_TMP_DIR}"
+            sudo mv "${LAZYDOCKER_TMP_DIR}/lazydocker" /usr/local/bin/lazydocker
+            sudo chmod +x /usr/local/bin/lazydocker
+            rm -rf "${LAZYDOCKER_TMP_DIR}"
+            echo "==> Lazydocker v${LAZYDOCKER_VERSION} installed successfully"
+        fi
+    fi
+else
+    echo "==> Lazydocker already installed: $(lazydocker --version | head -n 1)"
 fi
 
 {{ else if eq .osid "linux-arch" -}}

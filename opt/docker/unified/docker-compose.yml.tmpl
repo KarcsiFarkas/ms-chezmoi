@@ -258,7 +258,7 @@ services:
       - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"
 
       # Basic auth middleware (username: admin, generate with: htpasswd -nb admin password)
-      - "traefik.http.middlewares.traefik-auth.basicauth.users={{ .services.traefik.dashboard_auth | default "admin:$$apr1$$H6usRDpK$$6r.F8bjNxZ3W9YfNd5V9c1" }}"
+      # - 'traefik.http.middlewares.traefik-auth.basicauth.users={{ .services.traefik.dashboard_auth | default "admin:$$apr1$$H6usRDpK$$6r.F8bjNxZ3W9YfNd5V9c1" }}'
 
       # Metrics endpoint
       - "traefik.http.services.traefik-metrics.loadbalancer.server.port=8081"
@@ -335,7 +335,7 @@ services:
       --loglevel warning
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD}
+      --requirepass "${REDIS_PASSWORD}"
 
     volumes:
       - redis_data:/data
@@ -657,10 +657,11 @@ services:
     environment:
       PUID: ${HOMEPAGE_PUID:-1000}
       PGID: ${HOMEPAGE_PGID:-1000}
+      HOMEPAGE_ALLOWED_HOSTS: "localhost,home.{{ .tenant.domain }},{{ .tenant.domain }}"
       TZ: {{ .deployment.timezone | default "UTC" }}
 
     volumes:
-      - homepage_config:/app/config
+      - ./configs/homepage:/app/config:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
     networks:
@@ -1163,7 +1164,7 @@ services:
   # Version: 1.25.2
   # Purpose: Self-hosted Git service with web UI
   # Networks: frontend (web UI, SSH)
-  # URL: https://git.{{ .tenant.domain }}
+  # URL: https://gitea.{{ .tenant.domain }}
   # --------------------------------------------------------------------------
   gitea:
     image: gitea/gitea:1.25.2
@@ -1178,7 +1179,8 @@ services:
       # Server configuration
       GITEA__server__DOMAIN: git.{{ .tenant.domain }}
       GITEA__server__SSH_DOMAIN: git.{{ .tenant.domain }}
-      GITEA__server__ROOT_URL: https://git.{{ .tenant.domain }}
+      GITEA__server__ROOT_URL: https://git.{{ .tenant.domain }}/
+      GITEA__server__HTTP_PORT: 3000
       GITEA__server__SSH_PORT: 2222
       GITEA__server__SSH_LISTEN_PORT: 22
       GITEA__server__START_SSH_SERVER: true
@@ -1186,6 +1188,9 @@ services:
       # Database (SQLite for simplicity)
       GITEA__database__DB_TYPE: sqlite3
       GITEA__database__PATH: /data/gitea/gitea.db
+
+      # Logging
+      GITEA__log__ROOT_PATH: /data/gitea/log
 
       # Security
       GITEA__security__INSTALL_LOCK: ${GITEA_INSTALL_LOCK:-false}

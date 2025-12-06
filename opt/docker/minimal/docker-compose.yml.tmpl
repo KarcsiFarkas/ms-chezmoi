@@ -159,8 +159,7 @@ services:
     restart: unless-stopped
 
     volumes:
-      - homepage_data:/app/config
-      - ./configs/homepage:/app/config/custom:ro
+      - ./configs/homepage:/app/config:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
     networks:
@@ -169,6 +168,7 @@ services:
     environment:
       - PUID=${HOMEPAGE_PUID:-1000}
       - PGID=${HOMEPAGE_PGID:-1000}
+      - HOMEPAGE_ALLOWED_HOSTS=localhost,home.{{ .tenant.domain }},{{ .tenant.domain }}
       - TZ={{ .deployment.timezone }}
 
     labels:
@@ -203,15 +203,17 @@ services:
       - USER_UID=${GITEA_UID:-1000}
       - USER_GID=${GITEA_GID:-1000}
       - GITEA__database__DB_TYPE=sqlite3
-      - GITEA__server__DOMAIN=git.{{ .tenant.domain }}
-      - GITEA__server__ROOT_URL=https://git.{{ .tenant.domain }}
+      - GITEA__server__DOMAIN=gitea.{{ .tenant.domain }}
+      - GITEA__server__ROOT_URL=https://gitea.{{ .tenant.domain }}/
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__log__ROOT_PATH=/data/gitea/log
       - GITEA__service__DISABLE_REGISTRATION=${GITEA_DISABLE_REGISTRATION:-false}
       - GITEA__service__REQUIRE_SIGNIN_VIEW=${GITEA_REQUIRE_SIGNIN:-false}
       - TZ={{ .deployment.timezone }}
 
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gitea.rule=Host(`git.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.gitea.rule=Host(`gitea.{{ .tenant.domain }}`)"
       - "traefik.http.routers.gitea.entrypoints=websecure"
       - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
       - "traefik.http.services.gitea.loadbalancer.server.port=3000"

@@ -46,6 +46,8 @@ volumes:
   # Services
   authentik_data:
     driver: local
+  lldap_data:
+    driver: local
   immich_data:
     driver: local
   immich_postgres:
@@ -56,6 +58,12 @@ volumes:
     driver: local
   gitea_data:
     driver: local
+  gitlab_config:
+    driver: local
+  gitlab_logs:
+    driver: local
+  gitlab_data:
+    driver: local
   vaultwarden_data:
     driver: local
   nextcloud_data:
@@ -65,6 +73,24 @@ volumes:
   qbittorrent_config:
     driver: local
   syncthing_config:
+    driver: local
+  vikunja_data:
+    driver: local
+  seafile_data:
+    driver: local
+  seafile_mysql:
+    driver: local
+  stirlingpdf_data:
+    driver: local
+  stirlingpdf_config:
+    driver: local
+  stirlingpdf_logs:
+    driver: local
+  memos_data:
+    driver: local
+  calibreweb_config:
+    driver: local
+  calibreweb_books:
     driver: local
 
 # ============================================================================
@@ -338,6 +364,53 @@ services:
           memory: 512M
 {{- end }}
 
+{{- if .services.lldap.enabled }}
+  # ==========================================================================
+  # LLDAP - Lightweight LDAP Server
+  # ==========================================================================
+  lldap:
+    image: lldap/lldap:stable
+    container_name: lldap
+    restart: unless-stopped
+
+    environment:
+      - UID={{ index .services.lldap "uid" | default "1000" }}
+      - GID={{ index .services.lldap "gid" | default "1000" }}
+      - TZ={{ .deployment.timezone }}
+      - LLDAP_JWT_SECRET={{ index .services.lldap "jwt_secret" | default "CHANGE_ME_JWT_SECRET" }}
+      - LLDAP_KEY_SEED={{ index .services.lldap "key_seed" | default "CHANGE_ME_KEY_SEED" }}
+      - LLDAP_LDAP_BASE_DN={{ index .services.lldap "base_dn" | default "dc=example,dc=com" }}
+      - LLDAP_LDAP_USER_PASS={{ index .services.lldap "admin_password" | default "CHANGE_ME_ADMIN_PASSWORD" }}
+      - LLDAP_LDAP_USER_EMAIL={{ index .services.lldap "admin_email" | default "admin@example.com" }}
+
+    ports:
+      - "3890:3890"  # LDAP port
+      - "17170:17170"  # Web UI port
+
+    volumes:
+      - "lldap_data:/data"
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.lldap.rule=Host(`ldap.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.lldap.entrypoints=websecure"
+      - "traefik.http.routers.lldap.tls.certresolver=letsencrypt"
+      - "traefik.http.services.lldap.loadbalancer.server.port=17170"
+{{- end }}
+
 {{- if .services.immich.enabled }}
   # ==========================================================================
   # Immich - Photo Management and Backup
@@ -514,13 +587,16 @@ services:
     environment:
       USER_UID: {{ .services.gitea.uid }}
       USER_GID: {{ .services.gitea.gid }}
-      GITEA__server__DOMAIN: git.{{ .tenant.domain }}
-      GITEA__server__SSH_DOMAIN: git.{{ .tenant.domain }}
-      GITEA__server__ROOT_URL: https://git.{{ .tenant.domain }}
+      GITEA__server__DOMAIN: gitea.{{ .tenant.domain }}
+      GITEA__server__SSH_DOMAIN: gitea.{{ .tenant.domain }}
+      GITEA__server__ROOT_URL: https://gitea.{{ .tenant.domain }}/
+      GITEA__server__HTTP_PORT: 3000
       GITEA__server__SSH_PORT: 2222
       GITEA__server__SSH_LISTEN_PORT: 22
+      GITEA__server__START_SSH_SERVER: true
       GITEA__database__DB_TYPE: sqlite3
       GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__log__ROOT_PATH: /data/gitea/log
       GITEA__security__INSTALL_LOCK: false
       GITEA__repository__DEFAULT_PRIVATE: true
       GITEA__service__DISABLE_REGISTRATION: {{ .services.gitea.disable_registration }}
@@ -549,7 +625,7 @@ services:
 
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gitea.rule=Host(`git.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.gitea.rule=Host(`gitea.{{ .tenant.domain }}`)"
       - "traefik.http.routers.gitea.entrypoints=websecure"
       - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
       - "traefik.http.services.gitea.loadbalancer.server.port=3000"
@@ -813,10 +889,10 @@ services:
     environment:
       PUID: {{ .services.homepage.puid }}
       PGID: {{ .services.homepage.pgid }}
-      HOMEPAGE_ALLOWED_HOSTS: "home.{{ .tenant.domain }}"
+      HOMEPAGE_ALLOWED_HOSTS: "home.{{ .tenant.domain }},{{ .tenant.domain }},localhost"
 
     volumes:
-      - "~/docker-data/homepage/config/homepage:/app/config:rw"
+      - "~/opt/docker/unified/configs/homepage:/app/config:rw"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
     networks:
@@ -846,4 +922,319 @@ services:
       - "traefik.http.routers.homepage-sub.entrypoints=websecure"
       - "traefik.http.routers.homepage-sub.tls.certresolver=letsencrypt"
       - "traefik.http.routers.homepage-sub.service=homepage"
+{{- end }}
+
+{{- if .services.gitlab.enabled }}
+  # ==========================================================================
+  # GitLab - Complete DevOps Platform
+  # ==========================================================================
+  gitlab:
+    image: gitlab/gitlab-ee:{{ .services.gitlab.version | default "latest" }}-ee.0
+    container_name: gitlab
+    restart: unless-stopped
+    hostname: git.{{ .tenant.domain }}
+
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://git.{{ .tenant.domain }}'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        # Disable Prometheus to save resources (optional)
+        prometheus_monitoring['enable'] = {{ index .services.gitlab "prometheus_enabled" | default "false" }}
+        # Configure SMTP if needed
+        {{- if index .services.gitlab "smtp_enabled" }}
+        gitlab_rails['smtp_enable'] = true
+        gitlab_rails['smtp_address'] = "{{ index .services.gitlab "smtp_address" }}"
+        gitlab_rails['smtp_port'] = {{ index .services.gitlab "smtp_port" }}
+        gitlab_rails['smtp_user_name'] = "{{ index .services.gitlab "smtp_user" }}"
+        gitlab_rails['smtp_password'] = "{{ index .services.gitlab "smtp_password" }}"
+        gitlab_rails['smtp_domain'] = "{{ .tenant.domain }}"
+        gitlab_rails['smtp_authentication'] = "login"
+        gitlab_rails['smtp_enable_starttls_auto'] = true
+        gitlab_rails['gitlab_email_from'] = '{{ index .services.gitlab "email_from" }}'
+        {{- end }}
+
+    ports:
+      - "2222:22"  # SSH port for Git operations
+
+    volumes:
+      - "gitlab_config:/etc/gitlab"
+      - "gitlab_logs:/var/log/gitlab"
+      - "gitlab_data:/var/opt/gitlab"
+
+    networks:
+      - paas_network
+
+    shm_size: '256m'
+
+    # Resource limits - GitLab is resource-intensive
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitlab.rule=Host(`git.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.gitlab.entrypoints=websecure"
+      - "traefik.http.routers.gitlab.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gitlab.loadbalancer.server.port=80"
+{{- end }}
+
+{{- if .services.vikunja.enabled }}
+  # ==========================================================================
+  # Vikunja - Task Management and To-Do Lists
+  # ==========================================================================
+  vikunja:
+    image: vikunja/vikunja:{{ .services.vikunja.version | default "latest" }}
+    container_name: vikunja
+    restart: unless-stopped
+
+    environment:
+      VIKUNJA_SERVICE_PUBLICURL: https://tasks.{{ .tenant.domain }}
+      VIKUNJA_DATABASE_TYPE: sqlite
+      VIKUNJA_DATABASE_PATH: /app/vikunja/vikunja.db
+      VIKUNJA_SERVICE_JWTSECRET: {{ index .services.vikunja "jwt_secret" | default "CHANGE_ME_JWT_SECRET_32_CHARS_MIN" }}
+      VIKUNJA_SERVICE_FRONTENDURL: https://tasks.{{ .tenant.domain }}
+
+    volumes:
+      - "vikunja_data:/app/vikunja"
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vikunja.rule=Host(`tasks.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.vikunja.entrypoints=websecure"
+      - "traefik.http.routers.vikunja.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vikunja.loadbalancer.server.port=8080"
+{{- end }}
+
+{{- if .services.seafile.enabled }}
+  # ==========================================================================
+  # Seafile - File Sync and Share
+  # ==========================================================================
+  seafile-mysql:
+    image: mariadb:10.11
+    container_name: seafile-mysql
+    restart: unless-stopped
+
+    environment:
+      - MYSQL_ROOT_PASSWORD={{ index .services.seafile "db_root_password" | default "CHANGE_ME_DB_ROOT_PASSWORD" }}
+      - MYSQL_LOG_CONSOLE=true
+      - MARIADB_AUTO_UPGRADE=1
+
+    volumes:
+      - "seafile_mysql:/var/lib/mysql"
+
+    networks:
+      - paas_network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  seafile:
+    image: seafileltd/seafile-mc:{{ .services.seafile.version | default "latest" }}
+    container_name: seafile
+    restart: unless-stopped
+
+    environment:
+      - DB_HOST=seafile-mysql
+      - DB_ROOT_PASSWD={{ index .services.seafile "db_root_password" | default "CHANGE_ME_DB_ROOT_PASSWORD" }}
+      - TIME_ZONE={{ .deployment.timezone }}
+      - SEAFILE_ADMIN_EMAIL={{ index .services.seafile "admin_email" | default "admin@example.com" }}
+      - SEAFILE_ADMIN_PASSWORD={{ index .services.seafile "admin_password" | default "CHANGE_ME_ADMIN_PASSWORD" }}
+      - SEAFILE_SERVER_LETSENCRYPT=false
+      - SEAFILE_SERVER_HOSTNAME=files.{{ .tenant.domain }}
+
+    volumes:
+      - "seafile_data:/shared"
+
+    networks:
+      - paas_network
+
+    depends_on:
+      seafile-mysql:
+        condition: service_healthy
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.seafile.rule=Host(`files.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.seafile.entrypoints=websecure"
+      - "traefik.http.routers.seafile.tls.certresolver=letsencrypt"
+      - "traefik.http.services.seafile.loadbalancer.server.port=80"
+{{- end }}
+
+{{- if .services.stirlingpdf.enabled }}
+  # ==========================================================================
+  # Stirling-PDF - PDF Manipulation Tool
+  # ==========================================================================
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:{{ .services.stirlingpdf.version | default "latest" }}
+    container_name: stirling-pdf
+    restart: unless-stopped
+
+    environment:
+      DOCKER_ENABLE_SECURITY: {{ index .services.stirlingpdf "security_enabled" | default "true" }}
+      SECURITY_ENABLELOGIN: {{ index .services.stirlingpdf "enable_login" | default "true" }}
+      SYSTEM_DEFAULTLOCALE: {{ index .services.stirlingpdf "locale" | default "en-US" }}
+      UI_APPNAME: {{ index .services.stirlingpdf "app_name" | default "Stirling-PDF" }}
+      UI_HOMEDESCRIPTION: {{ index .services.stirlingpdf "description" | default "Your locally hosted one-stop-shop for all your PDF needs" }}
+      SYSTEM_MAXFILESIZE: {{ index .services.stirlingpdf "max_file_size" | default "100" }}
+      METRICS_ENABLED: {{ index .services.stirlingpdf "metrics_enabled" | default "true" }}
+      PUID: {{ index .services.stirlingpdf "puid" | default "1000" }}
+      PGID: {{ index .services.stirlingpdf "pgid" | default "1000" }}
+      UMASK: "022"
+
+    volumes:
+      - "stirlingpdf_data:/usr/share/tessdata"
+      - "stirlingpdf_config:/configs"
+      - "stirlingpdf_logs:/logs"
+
+    networks:
+      - paas_network
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/info/status | grep -q 'UP'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stirlingpdf.rule=Host(`pdf.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.stirlingpdf.entrypoints=websecure"
+      - "traefik.http.routers.stirlingpdf.tls.certresolver=letsencrypt"
+      - "traefik.http.services.stirlingpdf.loadbalancer.server.port=8080"
+{{- end }}
+
+{{- if .services.memos.enabled }}
+  # ==========================================================================
+  # Memos - Privacy-First, Lightweight Note-Taking Service
+  # ==========================================================================
+  memos:
+    image: neosmemo/memos:{{ .services.memos.version | default "stable" }}
+    container_name: memos
+    restart: unless-stopped
+
+    environment:
+      - TZ={{ .deployment.timezone }}
+      - MEMOS_MODE={{ .services.memos.mode | default "prod" }}
+      - MEMOS_ADDR=:5230
+      - MEMOS_DRIVER=sqlite
+      - MEMOS_DSN=/var/opt/memos/memos_prod.db
+
+    volumes:
+      - "memos_data:/var/opt/memos"
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memos.rule=Host(`notes.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.memos.entrypoints=websecure"
+      - "traefik.http.routers.memos.tls.certresolver=letsencrypt"
+      - "traefik.http.services.memos.loadbalancer.server.port=5230"
+{{- end }}
+
+{{- if .services.calibreweb.enabled }}
+  # ==========================================================================
+  # Calibre-Web - E-Book Library Management
+  # ==========================================================================
+  calibre-web:
+    image: lscr.io/linuxserver/calibre-web:{{ .services.calibreweb.version | default "latest" }}
+    container_name: calibre-web
+    restart: unless-stopped
+
+    environment:
+      - PUID={{ .services.calibreweb.puid | default "1000" }}
+      - PGID={{ .services.calibreweb.pgid | default "1000" }}
+      - TZ={{ .deployment.timezone }}
+      - DOCKER_MODS=linuxserver/mods:universal-calibre
+
+    volumes:
+      - "calibreweb_config:/config"
+      - "calibreweb_books:/books"
+
+    networks:
+      - paas_network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.calibreweb.rule=Host(`books.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.calibreweb.entrypoints=websecure"
+      - "traefik.http.routers.calibreweb.tls.certresolver=letsencrypt"
+      - "traefik.http.services.calibreweb.loadbalancer.server.port=8083"
 {{- end }}

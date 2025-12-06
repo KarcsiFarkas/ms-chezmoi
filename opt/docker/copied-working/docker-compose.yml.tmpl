@@ -510,13 +510,16 @@ services:
     environment:
       USER_UID: {{ .services.gitea.uid }}
       USER_GID: {{ .services.gitea.gid }}
-      GITEA__server__DOMAIN: git.{{ .tenant.domain }}
-      GITEA__server__SSH_DOMAIN: git.{{ .tenant.domain }}
-      GITEA__server__ROOT_URL: https://git.{{ .tenant.domain }}
+      GITEA__server__DOMAIN: gitea.{{ .tenant.domain }}
+      GITEA__server__SSH_DOMAIN: gitea.{{ .tenant.domain }}
+      GITEA__server__ROOT_URL: https://gitea.{{ .tenant.domain }}/
+      GITEA__server__HTTP_PORT: 3000
       GITEA__server__SSH_PORT: 2222
       GITEA__server__SSH_LISTEN_PORT: 22
+      GITEA__server__START_SSH_SERVER: true
       GITEA__database__DB_TYPE: sqlite3
       GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__log__ROOT_PATH: /data/gitea/log
       GITEA__security__INSTALL_LOCK: false
       GITEA__repository__DEFAULT_PRIVATE: true
       GITEA__service__DISABLE_REGISTRATION: {{ .services.gitea.disable_registration }}
@@ -545,7 +548,7 @@ services:
 
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gitea.rule=Host(`git.{{ .tenant.domain }}`)"
+      - "traefik.http.routers.gitea.rule=Host(`gitea.{{ .tenant.domain }}`)"
       - "traefik.http.routers.gitea.entrypoints=websecure"
       - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
       - "traefik.http.services.gitea.loadbalancer.server.port=3000"

@@ -19,6 +19,19 @@
           type: traefik
           url: http://traefik:8080
 
+{{- if (index .services "portainer") }}
+{{- if .services.portainer.enabled }}
+    - Portainer:
+        icon: portainer.png
+        href: https://portainer.{{ .tenant.domain }}
+        description: Docker Management
+        widget:
+          type: portainer
+          url: http://portainer:9000
+          key: {{ .services.portainer.api_key | default "" }}
+{{- end }}
+{{- end }}
+
 {{- if .services.authentik.enabled }}
     - Authentik:
         icon: authentik.png
@@ -49,8 +62,17 @@
         description: Git Repository Hosting
 {{- end }}
 
+{{- if (index .services "syncthing") }}
+{{- if .services.syncthing.enabled }}
+    - Syncthing:
+        icon: syncthing.png
+        href: https://sync.{{ .tenant.domain }}
+        description: File Synchronization
+{{- end }}
+{{- end }}
+
 # Media Services
-{{- if or .services.immich.enabled .services.jellyfin.enabled }}
+{{- if or .services.immich.enabled .services.jellyfin.enabled (and (index .services "qbittorrent") .services.qbittorrent.enabled) }}
 - Media:
 {{- if .services.immich.enabled }}
     - Immich:
@@ -64,5 +86,17 @@
         icon: jellyfin.png
         href: https://media.{{ .tenant.domain }}
         description: Media Streaming
+{{- end }}
+
+{{- if (index .services "qbittorrent") }}
+{{- if .services.qbittorrent.enabled }}
+    - qBittorrent:
+        icon: qbittorrent.png
+        href: https://torrent.{{ .tenant.domain }}
+        description: Torrent Client
+        widget:
+          type: qbittorrent
+          url: http://qbittorrent:8080
+{{- end }}
 {{- end }}
 {{- end }}

@@ -295,7 +295,7 @@ Access your services:
 
 #### Gitea
 - **Purpose**: Self-hosted Git service
-- **URL**: `https://git.{domain}`
+- **URL**: `https://gitea.{domain}`
 - **SSH Port**: 2222
 - **Profile**: `gitea`
 - **Resources**: 2 CPU, 2GB RAM
@@ -458,7 +458,7 @@ After deployment, configure each service:
 4. Configure external storage (optional)
 
 #### Gitea
-1. Access `https://git.{domain}`
+1. Access `https://gitea.{domain}`
 2. Complete installation wizard
 3. Create admin user
 4. Configure SSH access (port 2222)
